@@ -5,13 +5,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.example.miniproject.screen.onboarding.OnboardingRoute
 
 @Composable
 fun AuthRoute() {
+    var onboardingFinished by rememberSaveable { mutableStateOf(false) }
     var isRegister by rememberSaveable { mutableStateOf(false) }
     var signedIn by rememberSaveable { mutableStateOf(false) }
 
-    if (signedIn) {
+    if (!onboardingFinished) {
+        OnboardingRoute(
+            onFinished = {
+                onboardingFinished = true
+                isRegister = true
+            }
+        )
+    } else if (signedIn) {
         WelcomeScreen(onSignOut = { signedIn = false })
     } else {
         AuthScreen(
