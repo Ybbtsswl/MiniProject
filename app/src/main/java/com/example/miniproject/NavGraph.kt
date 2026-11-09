@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import io.github.jan.supabase.auth.auth
+import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.screen.AddExpenseScreen
 import com.example.miniproject.screen.DashboardScreen
 import com.example.miniproject.screen.ExpenseScreen
@@ -58,6 +59,7 @@ fun AppNavHost(
             )
         ) { backStackEntry ->
             val isRegister = backStackEntry.arguments?.getBoolean("isRegister") ?: false
+            val authRepository = remember { AuthRepository() }
             AuthScreen(
                 isRegister = isRegister,
                 onModeChange = { newMode ->
@@ -69,15 +71,22 @@ fun AppNavHost(
                     navController.navigate(Screen.Welcome.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
+                },
+                onAuthenticate = { request ->
+                    authRepository.authenticate(request)
                 }
             )
         }
 
         composable(Screen.Welcome.route) {
+            val scope = rememberCoroutineScope()
             WelcomeScreen(
                 onSignOut = {
-                    navController.navigate(Screen.Onboarding.route) {
-                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    scope.launch {
+                        SupabaseClient.instance.auth.signOut()
+                        navController.navigate(Screen.Onboarding.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
                     }
                 },
                 onEnterDashboard = {

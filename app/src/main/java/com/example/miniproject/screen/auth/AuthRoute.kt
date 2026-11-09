@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.screen.DashboardScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
 
@@ -42,11 +44,15 @@ fun AuthRoute() {
         }
 
         else -> {
+            val authRepository = remember { AuthRepository() }
             AuthScreen(
                 isRegister = isRegister,
                 onModeChange = { isRegister = it },
                 onSuccess = {
                     signedIn = true
+                },
+                onAuthenticate = { request ->
+                    authRepository.authenticate(request)
                 }
             )
         }

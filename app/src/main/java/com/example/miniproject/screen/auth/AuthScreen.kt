@@ -21,6 +21,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,9 @@ import androidx.compose.ui.unit.sp
 import com.example.miniproject.screen.componentUI.AuthField
 import com.example.miniproject.screen.componentUI.ModeButton
 import com.example.miniproject.screen.componentUI.PasswordField
+import com.example.miniproject.data.AuthRequest
+import com.example.miniproject.repository.AuthOutcome
+import kotlinx.coroutines.launch
 
 private val Cream = Color(0xFFFFFBF2)
 private val Yellow = Color(0xFFFFD447)
@@ -46,7 +50,8 @@ private val Muted = Color(0xFF777777)
 fun AuthScreen(
     isRegister: Boolean,
     onModeChange: (Boolean) -> Unit,
-    onSuccess: () -> Unit
+    onSuccess: () -> Unit,
+    onAuthenticate: suspend (AuthRequest) -> Result<AuthOutcome>
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
@@ -54,6 +59,8 @@ fun AuthScreen(
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf("") }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -233,8 +240,28 @@ fun AuthScreen(
 
                     error = validationError
 
-                    if (validationError.isBlank()) {
-                        onSuccess()
+                    if (validationError.isBlank() && !isLoading) {
+                        isLoading = true
+                        scope.launch {
+                            onAuthenticate(
+                                AuthRequest(
+                                    isRegister = isRegister,
+                                    name = name.trim(),
+                                    email = email.trim(),
+                                    password = password
+                                )
+                            ).onSuccess { outcome ->
+                                when (outcome) {
+                                    AuthOutcome.SignedIn -> onSuccess()
+                                    AuthOutcome.EmailConfirmationRequired -> {
+                                        error = "Account created. Please confirm your email before logging in."
+                                    }
+                                }
+                            }.onFailure { throwable ->
+                                error = throwable.message ?: "Authentication failed. Please try again."
+                            }
+                            isLoading = false
+                        }
                     }
                 },
                 modifier = Modifier
@@ -247,7 +274,7 @@ fun AuthScreen(
                 )
             ) {
                 Text(
-                    text = if (isRegister) "Create account" else "Log in",
+                    text = if (isLoading) "Please wait..." else if (isRegister) "Create account" else "Log in",
                     fontWeight = FontWeight.Bold
                 )
             }
