@@ -51,6 +51,9 @@ fun AuthRoute() {
                 onSuccess = {
                     signedIn = true
                 },
+                onRegistrationSuccess = {
+                    isRegister = false
+                },
                 onAuthenticate = { request ->
                     authRepository.authenticate(request)
                 }

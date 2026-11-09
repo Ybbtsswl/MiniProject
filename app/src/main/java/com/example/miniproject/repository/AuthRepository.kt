@@ -10,7 +10,7 @@ import kotlinx.serialization.json.put
 
 sealed interface AuthOutcome {
     data object SignedIn : AuthOutcome
-    data object EmailConfirmationRequired : AuthOutcome
+    data object Registered : AuthOutcome
 }
 
 class AuthRepository(
@@ -30,9 +30,7 @@ class AuthRepository(
                 }
 
                 val user = supabase.auth.currentUserOrNull()
-                if (user == null) {
-                    Result.success(AuthOutcome.EmailConfirmationRequired)
-                } else {
+                if (user != null) {
                     profileRepository.upsert(
                         Profile(
                             id = user.id,
@@ -40,8 +38,14 @@ class AuthRepository(
                             email = request.email
                         )
                     ).getOrThrow()
-                    Result.success(AuthOutcome.SignedIn)
                 }
+
+                // Registration must not leave the user inside the app.
+                // The user will sign in explicitly from the Login screen.
+                if (user != null) {
+                    supabase.auth.signOut()
+                }
+                Result.success(AuthOutcome.Registered)
             } else {
                 supabase.auth.signInWith(Email) {
                     email = request.email
