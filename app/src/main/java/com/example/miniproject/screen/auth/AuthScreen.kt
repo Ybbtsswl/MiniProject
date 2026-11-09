@@ -212,7 +212,7 @@ fun AuthScreen(
             Button(
                 onClick = {
                     val validationError = when {
-                        email.isBlank() || !email.contains("@") -> {
+                        email.isBlank() || !email.contains("@") || !email.contains(".com") -> {
                             "Please enter a valid email address."
                         }
 

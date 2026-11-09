@@ -8,6 +8,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -17,17 +22,25 @@ import androidx.compose.ui.unit.sp
 import com.example.miniproject.data.Expense
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.ui.theme.MoneeRed
+import com.example.miniproject.repository.ExpenseRepository
 
 @Composable
 fun ExpenseScreen(
     onAddClick: () -> Unit,
-    onSplitBillClick: () -> Unit
+    onSplitBillClick: () -> Unit,
+    userId: String? = null
 ) {
-    val expenses = listOf(
-        Expense(amount = 15.50, category = "Food", description = "Lunch", date = "2026-11-05"),
-        Expense(amount = 68.00, category = "Transport", description = "Bus & Train", date = "2026-11-04"),
-        Expense(amount = 120.00, category = "Shopping", description = "Split with friends", date = "2026-11-03", isFromSplit = true)
-    )
+    var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
+    val repository = remember { ExpenseRepository() }
+
+    LaunchedEffect(userId) {
+        expenses = if (userId == null) {
+            emptyList()
+        } else {
+            repository.getExpenses(userId).getOrDefault(emptyList())
+        }
+    }
+
     val total = expenses.sumOf { it.amount }
 
     Surface(

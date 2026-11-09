@@ -1,18 +1,24 @@
 package com.example.miniproject
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import io.github.jan.supabase.auth.auth
 import com.example.miniproject.screen.AddExpenseScreen
 import com.example.miniproject.screen.DashboardScreen
 import com.example.miniproject.screen.ExpenseScreen
 import com.example.miniproject.screen.auth.AuthScreen
 import com.example.miniproject.screen.auth.WelcomeScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
+import com.example.miniproject.data.Expense
+import com.example.miniproject.repository.ExpenseRepository
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
@@ -83,7 +89,9 @@ fun AppNavHost(
         }
 
         composable(Screen.Dashboard.route) {
+            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id?.toString()
             DashboardScreen(
+                userId = userId,
                 onAddExpense = {
                     navController.navigate(Screen.AddExpense.route)
                 }
@@ -91,10 +99,27 @@ fun AppNavHost(
         }
 
         composable("add_expense") {
+            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id?.toString()
+            val scope = rememberCoroutineScope()
+            val repository = remember { ExpenseRepository() }
+
             AddExpenseScreen(
                 onSave = { amount, category, description, date ->
-
-                    navController.popBackStack()
+                    if (userId != null) {
+                        scope.launch {
+                            repository.addExpense(
+                                Expense(
+                                    userId = userId,
+                                    amount = amount,
+                                    category = category,
+                                    description = description,
+                                    date = date
+                                )
+                            ).onSuccess {
+                                navController.popBackStack()
+                            }
+                        }
+                    }
                 },
                 onBack = {
                     navController.popBackStack()
