@@ -99,10 +99,19 @@ fun AppNavHost(
 
         composable(Screen.Dashboard.route) {
             val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id?.toString()
+            val scope = rememberCoroutineScope()
             DashboardScreen(
                 userId = userId,
                 onAddExpense = {
                     navController.navigate(Screen.AddExpense.route)
+                },
+                onSignOut = {
+                    scope.launch {
+                        SupabaseClient.instance.auth.signOut()
+                        navController.navigate(Screen.Onboarding.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
+                    }
                 }
             )
         }
