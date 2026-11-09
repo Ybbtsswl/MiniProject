@@ -54,8 +54,7 @@ private val Red = Color(0xFFD92935)
 @Composable
 fun DashboardScreen(
     userId: String? = null,
-    onAddExpense: () -> Unit = {},
-    onSignOut: () -> Unit = {}
+    onAddExpense: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
@@ -91,10 +90,7 @@ fun DashboardScreen(
                 )
                 1 -> ScreenPlaceholder("Analytics")
                 2 -> ScreenPlaceholder("Split Bill")
-                3 -> ProfileScreen(
-                    userId = userId,
-                    onSignOut = onSignOut
-                )
+                3 -> ScreenPlaceholder("Profile")
             }
         }
     }

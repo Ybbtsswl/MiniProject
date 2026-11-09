@@ -51,7 +51,6 @@ fun AuthScreen(
     isRegister: Boolean,
     onModeChange: (Boolean) -> Unit,
     onSuccess: () -> Unit,
-    onRegistrationSuccess: () -> Unit = {},
     onAuthenticate: suspend (AuthRequest) -> Result<AuthOutcome>
 ) {
     var name by rememberSaveable { mutableStateOf("") }
@@ -254,7 +253,9 @@ fun AuthScreen(
                             ).onSuccess { outcome ->
                                 when (outcome) {
                                     AuthOutcome.SignedIn -> onSuccess()
-                                    AuthOutcome.Registered -> onRegistrationSuccess()
+                                    AuthOutcome.EmailConfirmationRequired -> {
+                                        error = "Account created. Please confirm your email before logging in."
+                                    }
                                 }
                             }.onFailure { throwable ->
                                 error = throwable.message ?: "Authentication failed. Please try again."
