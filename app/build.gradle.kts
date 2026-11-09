@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.miniproject"
-        minSdk = 37
+        minSdk = 36
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -38,6 +38,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
     implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
     implementation(platform("io.github.jan-tennert.supabase:bom:3.6.0"))

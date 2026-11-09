@@ -1,10 +1,7 @@
 package com.example.miniproject.screen
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -12,96 +9,34 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import androidx.navigation.fragment.findNavController
-import com.example.miniproject.SupabaseClient
-import com.example.miniproject.data.Expense
-import com.example.miniproject.ui.theme.MiniProjectTheme
-import com.example.miniproject.viewmodel.ExpenseViewModel
-import io.github.jan.supabase.auth.auth
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-
-class AddExpenseScreen : Fragment() {
-    private val vm: ExpenseViewModel by activityViewModels()
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View = ComposeView(requireContext()).apply {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        setContent {
-            MiniProjectTheme {
-                AddExpenseContent(
-                    onSave = { amount, category, description, date ->
-                        saveExpense(amount, category, description, date)
-                    },
-                    onCancel = { findNavController().popBackStack() }
-                )
-            }
-        }
-    }
-
-    private fun saveExpense(amount: Double, category: String, description: String, date: String) {
-        val userId = SupabaseClient.instance.auth.currentSessionOrNull()?.user?.id
-        if (userId.isNullOrEmpty()) {
-            Toast.makeText(requireContext(), "Login required", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        vm.saveExpense(
-            Expense(
-                userId = userId,
-                amount = amount,
-                category = category,
-                description = description,
-                date = date
-            ),
-            userId
-        ){ success ->
-            if (success) {
-                Toast.makeText(requireContext(), "Saved", Toast.LENGTH_SHORT).show()
-                findNavController().popBackStack()
-            } else {
-                Toast.makeText(requireContext(), "Failed to save", Toast.LENGTH_SHORT).show()
-            }
-            vm.clearMessage()
-        }
-
-        findNavController().popBackStack()
-    }
-}
+import com.example.miniproject.data.Expense
+import com.example.miniproject.ui.theme.MiniProjectTheme
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 private val categories = listOf("Food", "Transport", "Shopping", "Bills", "Entertainment", "Other")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddExpenseContent(
+fun AddExpenseScreen(
     onSave: (amount: Double, category: String, description: String, date: String) -> Unit,
-    onCancel: () -> Unit
+    onBack: () -> Unit
 ) {
     var tab by remember { mutableIntStateOf(0) } // 0 = Manual, 1 = Scan Receipt
     var amount by remember { mutableStateOf("") }
@@ -133,7 +68,7 @@ fun AddExpenseContent(
         ) {
             // Top bar: back arrow + centered title
             Box(Modifier.fillMaxWidth().padding(top = 12.dp), contentAlignment = Alignment.Center) {
-                IconButton(onClick = onCancel, modifier = Modifier.align(Alignment.CenterStart)) {
+                IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
                 Text("Add Expense", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -172,7 +107,7 @@ fun AddExpenseContent(
             Spacer(Modifier.height(20.dp))
 
             if (tab == 1) {
-                // Placeholder for the scan flow
+                // Scan Receipt placeholder
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = scheme.surface,
@@ -187,6 +122,7 @@ fun AddExpenseContent(
                     }
                 }
             } else {
+                // Amount
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it },
@@ -199,6 +135,7 @@ fun AddExpenseContent(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Category
                 Text(
                     "Category",
                     style = MaterialTheme.typography.titleSmall,
@@ -229,6 +166,7 @@ fun AddExpenseContent(
 
                 Spacer(Modifier.height(20.dp))
 
+                // Description
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
@@ -241,6 +179,7 @@ fun AddExpenseContent(
 
                 Spacer(Modifier.height(16.dp))
 
+                // Date
                 Box {
                     OutlinedTextField(
                         value = date,
@@ -252,15 +191,20 @@ fun AddExpenseContent(
                         colors = fieldColors,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Box(Modifier.matchParentSize().clickable { showDatePicker = true })
+                    Box(modifier = Modifier
+                        .matchParentSize()
+                        .clickable { showDatePicker = true }
+                    )
                 }
 
+                // Error message
                 error?.let {
                     Text(it, color = scheme.error, modifier = Modifier.padding(top = 12.dp))
                 }
 
                 Spacer(Modifier.height(28.dp))
 
+                // Save Button
                 Button(
                     onClick = {
                         val value = amount.toDoubleOrNull()
@@ -274,21 +218,26 @@ fun AddExpenseContent(
                         }
                     },
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
                 ) {
                     Text("Save Expense", fontWeight = FontWeight.SemiBold)
                 }
 
                 Spacer(Modifier.height(12.dp))
 
+                // Cancel Button
                 Button(
-                    onClick = onCancel,
+                    onClick = onBack,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFEDE7D3),
                         contentColor = scheme.onSurface
                     ),
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
                 ) {
                     Text("Cancel", fontWeight = FontWeight.SemiBold)
                 }
@@ -298,22 +247,34 @@ fun AddExpenseContent(
         }
     }
 
+    // Date Picker Dialog
     if (showDatePicker) {
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = LocalDate.parse(date)
-                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli()
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let {
-                        date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
+                        date = Instant.ofEpochMilli(it)
+                            .atZone(ZoneOffset.UTC)
+                            .toLocalDate()
+                            .toString()
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) {
+                    Text("OK")
+                }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
         ) {
             DatePicker(
                 state = pickerState,
@@ -329,6 +290,11 @@ fun AddExpenseContent(
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
-fun AddExpensePreview() {
-    MiniProjectTheme { AddExpenseContent(onSave = { _, _, _, _ -> }, onCancel = {}) }
+fun AddExpenseScreenPreview() {
+    MiniProjectTheme {
+        AddExpenseScreen(
+            onSave = { _, _, _, _ -> },
+            onBack = {}
+        )
+    }
 }

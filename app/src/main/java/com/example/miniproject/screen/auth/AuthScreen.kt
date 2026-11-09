@@ -264,7 +264,8 @@ fun AuthScreen(
 }
 
 @Composable
-fun WelcomeScreen(onSignOut: () -> Unit) {
+fun WelcomeScreen(onSignOut: () -> Unit,
+                  onEnterDashboard:()-> Unit) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Cream
@@ -297,6 +298,24 @@ fun WelcomeScreen(onSignOut: () -> Unit) {
                 color = Muted,
                 modifier = Modifier.padding(top = 8.dp, bottom = 28.dp)
             )
+
+            Button(
+                onClick = onEnterDashboard,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Yellow,
+                    contentColor = Ink
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = "Go to Dashboard",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
 
             Button(
                 onClick = onSignOut,

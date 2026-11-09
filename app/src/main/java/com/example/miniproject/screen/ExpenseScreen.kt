@@ -30,7 +30,10 @@ fun ExpenseScreen(
     )
     val total = expenses.sumOf { it.amount }
 
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -80,7 +83,10 @@ fun ExpenseScreen(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 20.dp, bottom = 10.dp)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 QuickAction("➕", "Add Expense", onAddClick, Modifier.weight(1f))
                 QuickAction("🧾", "Split Bill", onSplitBillClick, Modifier.weight(1f))
             }
@@ -94,7 +100,7 @@ fun ExpenseScreen(
 
             if (expenses.isEmpty()) {
                 Text(
-                    "No expenses yet\nTap \"Add Expense\" to get started!",
+                    text = "No expenses yet\nTap \"Add Expense\" to get started!",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
@@ -105,7 +111,9 @@ fun ExpenseScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(expenses) { ExpenseItem(it) }
+                    items(expenses) { exp ->
+                        ExpenseItem(exp)
+                    }
                 }
             }
         }
@@ -113,7 +121,12 @@ fun ExpenseScreen(
 }
 
 @Composable
-private fun QuickAction(emoji: String, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun QuickAction(
+    emoji: String,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
@@ -122,14 +135,24 @@ private fun QuickAction(emoji: String, label: String, onClick: () -> Unit, modif
         modifier = modifier
     ) {
         Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(36.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(emoji, fontSize = 16.sp) }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(emoji, fontSize = 16.sp)
+                }
             }
-            Text(label, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = label,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
@@ -143,24 +166,34 @@ fun ExpenseItem(exp: Expense) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier.padding(14.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(categoryEmoji(exp.category), fontSize = 20.sp) }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(categoryEmoji(exp.category), fontSize = 20.sp)
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(exp.category, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "${exp.description} · ${exp.date}",
+                    text = exp.category,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "${exp.description} · ${exp.date}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    "- RM ${String.format("%.2f", exp.amount)}",
+                    text = "- RM ${String.format("%.2f", exp.amount)}",
                     fontWeight = FontWeight.Bold,
                     color = MoneeRed,
                     style = MaterialTheme.typography.titleMedium
@@ -172,7 +205,7 @@ fun ExpenseItem(exp: Expense) {
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
                         Text(
-                            "Split",
+                            text = "Split",
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
@@ -193,7 +226,12 @@ private fun categoryEmoji(category: String): String = when (category.lowercase()
 }
 
 @Composable
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Expense Screen")
 fun ExpenseScreenPreview() {
-    MiniProjectTheme { ExpenseScreen(onAddClick = {}, onSplitBillClick = {}) }
+    MiniProjectTheme {
+        ExpenseScreen(
+            onAddClick = {},
+            onSplitBillClick = {}
+        )
+    }
 }
