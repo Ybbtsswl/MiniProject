@@ -7,6 +7,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Locale
 
 sealed interface AuthOutcome {
     data object SignedIn : AuthOutcome
@@ -20,9 +21,15 @@ class AuthRepository(
 
     suspend fun authenticate(request: AuthRequest): Result<AuthOutcome> {
         return try {
+            val normalizedEmail = request.email
+                .replace("\u00A0", "")
+                .replace("\u200B", "")
+                .trim()
+                .lowercase(Locale.ROOT)
+
             if (request.isRegister) {
                 supabase.auth.signUpWith(Email) {
-                    email = request.email
+                    email = normalizedEmail
                     password = request.password
                     data = buildJsonObject {
                         put("full_name", request.name)
@@ -37,14 +44,14 @@ class AuthRepository(
                         Profile(
                             id = user.id,
                             fullName = request.name,
-                            email = request.email
+                            email = normalizedEmail
                         )
                     ).getOrThrow()
                     Result.success(AuthOutcome.SignedIn)
                 }
             } else {
                 supabase.auth.signInWith(Email) {
-                    email = request.email
+                    email = normalizedEmail
                     password = request.password
                 }
 

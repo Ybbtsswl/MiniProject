@@ -45,6 +45,7 @@ private val Cream = Color(0xFFFFFBF2)
 private val Yellow = Color(0xFFFFD447)
 private val Ink = Color(0xFF202020)
 private val Muted = Color(0xFF777777)
+private val EmailPattern = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
 @Composable
 fun AuthScreen(
@@ -219,7 +220,12 @@ fun AuthScreen(
             Button(
                 onClick = {
                     val validationError = when {
-                        email.isBlank() || !email.contains("@") || !email.contains(".com") -> {
+                        !EmailPattern.matches(
+                            email
+                                .replace("\\u00A0", "")
+                                .replace("\\u200B", "")
+                                .trim()
+                        ) -> {
                             "Please enter a valid email address."
                         }
 
@@ -258,7 +264,20 @@ fun AuthScreen(
                                     }
                                 }
                             }.onFailure { throwable ->
-                                error = throwable.message ?: "Authentication failed. Please try again."
+                                val message = throwable.message.orEmpty()
+                                error = when {
+                                    message.contains("email_address_invalid", ignoreCase = true) -> {
+                                        "Supabase rejected this email. Use a real email address, not a test or example address."
+                                    }
+
+                                    message.contains("invalid_credentials", ignoreCase = true) -> {
+                                        "Email or password is incorrect."
+                                    }
+
+                                    else -> message.ifBlank {
+                                        "Authentication failed. Please try again."
+                                    }
+                                }
                             }
                             isLoading = false
                         }
