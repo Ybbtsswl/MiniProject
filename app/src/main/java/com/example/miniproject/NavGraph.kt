@@ -9,16 +9,15 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import io.github.jan.supabase.auth.auth
+import com.example.miniproject.data.Expense
 import com.example.miniproject.repository.AuthRepository
-import com.example.miniproject.screen.AddExpenseScreen
+import com.example.miniproject.repository.ExpenseRepository
 import com.example.miniproject.screen.DashboardScreen
 import com.example.miniproject.screen.ExpenseScreen
+import com.example.miniproject.screen.AddTransactionScreen
 import com.example.miniproject.screen.auth.AuthScreen
-import com.example.miniproject.screen.auth.WelcomeScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
-import com.example.miniproject.data.Expense
-import com.example.miniproject.repository.ExpenseRepository
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
@@ -26,9 +25,9 @@ sealed class Screen(val route: String) {
     object Auth : Screen("auth/{isRegister}") {
         fun createRoute(isRegister: Boolean) = "auth/$isRegister"
     }
-    object Welcome : Screen("welcome")
     object Dashboard : Screen("dashboard")
-    object AddExpense : Screen("add_expense")
+    object Expense : Screen("expense")
+    object AddTransaction : Screen("add_transaction") // unified screen
 }
 
 @Composable
@@ -68,7 +67,7 @@ fun AppNavHost(
                     }
                 },
                 onSuccess = {
-                    navController.navigate(Screen.Welcome.route) {
+                    navController.navigate(Screen.Dashboard.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
                 },
@@ -78,32 +77,13 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.Welcome.route) {
-            val scope = rememberCoroutineScope()
-            WelcomeScreen(
-                onSignOut = {
-                    scope.launch {
-                        SupabaseClient.instance.auth.signOut()
-                        navController.navigate(Screen.Onboarding.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
-                        }
-                    }
-                },
-                onEnterDashboard = {
-                    navController.navigate(Screen.Dashboard.route) {
-                        popUpTo(Screen.Welcome.route) { inclusive = true }
-                    }
-                }
-            )
-        }
-
         composable(Screen.Dashboard.route) {
-            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id?.toString()
+            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id
             val scope = rememberCoroutineScope()
             DashboardScreen(
                 userId = userId,
-                onAddExpense = {
-                    navController.navigate(Screen.AddExpense.route)
+                onExpense = {
+                    navController.navigate(Screen.Expense.route)
                 },
                 onSignOut = {
                     scope.launch {
@@ -116,16 +96,27 @@ fun AppNavHost(
             )
         }
 
-        composable("add_expense") {
-            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id?.toString()
-            val scope = rememberCoroutineScope()
-            val repository = remember { ExpenseRepository() }
+        composable(Screen.Expense.route) {
+            ExpenseScreen(
+                onAddClick = {
+                    navController.navigate(Screen.AddTransaction.route)
+                },
+                onSplitBillClick = {
+                    // TODO: navigate to Split Bill screen later
+                }
+            )
+        }
 
-            AddExpenseScreen(
-                onSave = { amount, category, description, date ->
+        composable(Screen.AddTransaction.route) {
+            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id
+            val scope = rememberCoroutineScope()
+            val expenseRepository = remember { ExpenseRepository() }
+
+            AddTransactionScreen(
+                onSaveExpense = { amount, category, description, date ->
                     if (userId != null) {
                         scope.launch {
-                            repository.addExpense(
+                            expenseRepository.addExpense(
                                 Expense(
                                     userId = userId,
                                     amount = amount,
@@ -138,6 +129,11 @@ fun AppNavHost(
                             }
                         }
                     }
+                },
+                onSaveIncome = { amount, category, description, date, _ ->
+                    // TODO: implement IncomeRepository later
+                    // For now, just go back
+                    navController.popBackStack()
                 },
                 onBack = {
                     navController.popBackStack()
