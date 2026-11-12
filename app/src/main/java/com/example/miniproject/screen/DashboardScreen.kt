@@ -2,25 +2,12 @@ package com.example.miniproject.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,7 +40,10 @@ private val Red = Color(0xFFD92935)
 @Composable
 fun DashboardScreen(
     userId: String? = null,
+    onAdd: () -> Unit = {},
     onExpense: () -> Unit = {},
+    onSplitBill: () -> Unit = {},
+    onAddSplitBill: () -> Unit = {},
     onSignOut: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -74,7 +64,7 @@ fun DashboardScreen(
             DashboardBottomBar(
                 selectedTab = selectedTab,
                 onTabSelected = { selectedTab = it },
-                onExpense = onExpense
+                onAdd = onAdd
             )
         }
     ) { innerPadding ->
@@ -86,10 +76,11 @@ fun DashboardScreen(
             when (selectedTab) {
                 0 -> DashboardContent(
                     expenses = expenses,
-                    onExpense = onExpense
+                    onExpense = onExpense,
+                    onSplitBill = onSplitBill
                 )
                 1 -> ScreenPlaceholder("Analytics")
-                2 -> ScreenPlaceholder("Split Bill")
+                2 -> SplitBillScreen(onBillClick = {}, onCreateSplitBill = onAddSplitBill, onBack = {}, showTitle = true)
                 3 -> ProfileScreen(userId = userId, onSignOut = onSignOut)
             }
         }
@@ -99,15 +90,15 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     expenses: List<Expense>,
-    onExpense: () -> Unit
+    onExpense: () -> Unit,
+    onSplitBill: () -> Unit
 ) {
     val currentMonth = LocalDate.now().toString().substring(0, 7)
     val monthlyExpenses = expenses
         .filter { it.date.startsWith(currentMonth) }
         .sumOf { it.amount }
-    val totalExpenses = expenses.sumOf { it.amount }
     val income = 0.0
-    val balance = income - totalExpenses
+    val balance = income - monthlyExpenses
 
     Column(
         modifier = Modifier
@@ -116,37 +107,19 @@ private fun DashboardContent(
             .padding(horizontal = 10.dp, vertical = 18.dp)
     ) {
         DashboardHeader()
-
         Spacer(modifier = Modifier.height(22.dp))
-
         BalanceCard(balance = balance)
-
         Spacer(modifier = Modifier.height(18.dp))
-
-        MonthlyOverview(
-            income = income,
-            expenses = monthlyExpenses
-        )
-
+        MonthlyOverview(income = income, expenses = monthlyExpenses)
         Spacer(modifier = Modifier.height(22.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Quick Actions",
-                color = DarkText,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
+        Text(
+            text = "Quick Actions",
+            color = DarkText,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
         Spacer(modifier = Modifier.height(12.dp))
-
-        QuickActionGrid(onExpense = onExpense)
-
+        QuickActionGrid(onExpense = onExpense, onSplitBill = onSplitBill)
         Spacer(modifier = Modifier.height(12.dp))
     }
 }
@@ -164,22 +137,14 @@ private fun DashboardHeader() {
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
-
         Text(
             text = "•",
             color = DarkText,
             fontSize = 18.sp,
             modifier = Modifier.padding(horizontal = 10.dp)
         )
-
-        Text(
-            text = "Home",
-            color = Color(0xFF3D414A),
-            fontSize = 16.sp
-        )
-
+        Text(text = "Home", color = Color(0xFF3D414A), fontSize = 16.sp)
         Spacer(modifier = Modifier.width(52.dp))
-
         Box(
             modifier = Modifier
                 .size(30.dp)
@@ -187,11 +152,8 @@ private fun DashboardHeader() {
                 .background(PaleYellow)
                 .border(2.dp, Color.White, CircleShape),
             contentAlignment = Alignment.Center
-        ) {
-            Text(text = "🙂", fontSize = 16.sp)
-        }
+        ) { Text(text = "🙂", fontSize = 16.sp) }
     }
-
     Column(modifier = Modifier.padding(top = 20.dp)) {
         Text(
             text = "Hello, User! 👋",
@@ -199,7 +161,6 @@ private fun DashboardHeader() {
             fontSize = 23.sp,
             fontWeight = FontWeight.Bold
         )
-
         Text(
             text = "Here's your financial overview",
             color = MutedText,
@@ -221,12 +182,7 @@ private fun BalanceCard(balance: Double) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(
-                text = "Total Balance  ◉",
-                color = MutedText,
-                fontSize = 12.sp
-            )
-
+            Text(text = "Total Balance  ◉", color = MutedText, fontSize = 12.sp)
             Text(
                 text = formatCurrency(balance),
                 color = DarkText,
@@ -235,7 +191,6 @@ private fun BalanceCard(balance: Double) {
                 modifier = Modifier.padding(top = 5.dp)
             )
         }
-
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
@@ -253,10 +208,7 @@ private fun BalanceCard(balance: Double) {
 }
 
 @Composable
-private fun MonthlyOverview(
-    income: Double,
-    expenses: Double
-) {
+private fun MonthlyOverview(income: Double, expenses: Double) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -269,44 +221,19 @@ private fun MonthlyOverview(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "This Month",
-                color = DarkText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-
+            Text(text = "This Month", color = DarkText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .background(BlueTint)
                     .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Text(text = "April 2025", color = MutedText, fontSize = 11.sp)
-            }
+            ) { Text(text = "April 2025", color = MutedText, fontSize = 11.sp) }
         }
-
         Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            MonthlyMetric(
-                label = "Income",
-                amount = formatCurrency(income),
-                dotColor = Color(0xFF9D7900),
-                modifier = Modifier.weight(1f)
-            )
-            MonthlyMetric(
-                label = "Expenses",
-                amount = formatCurrency(expenses),
-                dotColor = Red,
-                amountColor = Red,
-                modifier = Modifier.weight(1f)
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MonthlyMetric("Income", formatCurrency(income), Color(0xFF9D7900), Modifier.weight(1f))
+            MonthlyMetric("Expenses", formatCurrency(expenses), Red, Modifier.weight(1f), amountColor = Red)
         }
-
         Spacer(modifier = Modifier.height(16.dp))
         SpendingChart(expenses = expenses)
     }
@@ -314,11 +241,8 @@ private fun MonthlyOverview(
 
 @Composable
 private fun MonthlyMetric(
-    label: String,
-    amount: String,
-    dotColor: Color,
-    modifier: Modifier = Modifier,
-    amountColor: Color = DarkText
+    label: String, amount: String, dotColor: Color,
+    modifier: Modifier = Modifier, amountColor: Color = DarkText
 ) {
     Column(
         modifier = modifier
@@ -327,19 +251,9 @@ private fun MonthlyMetric(
             .padding(11.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Text(
-                text = "  $label",
-                color = MutedText,
-                fontSize = 11.sp
-            )
+            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(dotColor))
+            Text(text = "  $label", color = MutedText, fontSize = 11.sp)
         }
-
         Text(
             text = amount,
             color = amountColor,
@@ -352,166 +266,87 @@ private fun MonthlyMetric(
 
 @Composable
 private fun SpendingChart(expenses: Double) {
-    val values = if (expenses == 0.0) {
-        List(7) { 0 }
-    } else {
-        listOf(32, 66, 38, 70, 54, 36, 24)
-    }
+    val values = if (expenses == 0.0) List(7) { 0 } else listOf(32, 66, 38, 70, 54, 36, 24)
     val labels = listOf("M", "T", "W", "T", "F", "S", "S")
-
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(92.dp),
+        modifier = Modifier.fillMaxWidth().height(92.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
-        values.forEachIndexed { index, value ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Bottom
-            ) {
+        values.forEachIndexed { i, v ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
                         .width(34.dp)
-                        .height(value.dp)
+                        .height(v.dp)
                         .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
                         .background(
-                            when (index) {
+                            when (i) {
                                 0, 2, 5, 6 -> Color(0xFFFFDE86)
                                 1, 4 -> Color(0xFFE7BD36)
                                 else -> Yellow
                             }
                         )
                 )
-
-                Text(
-                    text = labels[index],
-                    color = MutedText,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 5.dp)
-                )
+                Text(labels[i], color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
             }
         }
     }
 }
 
 private fun formatCurrency(amount: Double): String {
-    val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+    val f = NumberFormat.getNumberInstance(Locale.US).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2
     }
-    return "RM ${formatter.format(amount)}"
+    return "RM ${f.format(amount)}"
 }
 
 @Composable
-private fun QuickActionGrid(onExpense: () -> Unit) {
+private fun QuickActionGrid(onExpense: () -> Unit, onSplitBill: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            QuickAction(
-                icon = "✓",
-                label = "Income",
-                modifier = Modifier.weight(1f)
-            ) { }
-            QuickAction(
-                icon = "📄",
-                label = "Expenses",
-                modifier = Modifier.weight(1f),
-                onClick = onExpense
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            QuickAction("✓", "Income", Modifier.weight(1f)) {}
+            QuickAction("📄", "Expenses", Modifier.weight(1f), onClick = onExpense)
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            QuickAction(
-                icon = "📈",
-                label = "Analytics",
-                modifier = Modifier.weight(1f)
-            ) { }
-            QuickAction(
-                icon = "⊘",
-                label = "Budget",
-                modifier = Modifier.weight(1f)
-            ) {  }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            QuickAction("📈", "Analytics", Modifier.weight(1f)) {}
+            QuickAction("📋", "Split Bill", Modifier.weight(1f), onClick = onSplitBill)
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            QuickAction(
-                icon = "🐷",
-                label = "Savings",
-                modifier = Modifier.weight(1f)
-            ) { }
-            QuickAction(
-                icon = "📋",
-                label = "History",
-                modifier = Modifier.weight(1f)
-            ) { }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            QuickAction("🐷", "Savings", Modifier.weight(1f)) {}
+            QuickAction("⊘", "Budget", Modifier.weight(1f)) {}
         }
     }
 }
 
 @Composable
 private fun QuickAction(
-    icon: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    icon: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit
 ) {
     Button(
         onClick = onClick,
         modifier = modifier.height(72.dp),
         shape = RoundedCornerShape(50.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = CardColor,
-            contentColor = DarkText
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.5.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = CardColor, contentColor = DarkText)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(PaleYellow),
+                Modifier.size(36.dp).clip(CircleShape).background(PaleYellow),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = icon,
-                    color = Color(0xFF8D6E00),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(icon, color = Color(0xFF8D6E00), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = label,
-                color = DarkText,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Spacer(Modifier.width(12.dp))
+            Text(label, color = DarkText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
 
-
 @Composable
 private fun DashboardBottomBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    onExpense: () -> Unit
+    selectedTab: Int, onTabSelected: (Int) -> Unit, onAdd: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -525,17 +360,15 @@ private fun DashboardBottomBar(
         BottomItem("⌁", "Analytics", selectedTab == 1) { onTabSelected(1) }
 
         Button(
-            onClick = onExpense,
+            onClick = onAdd,
             modifier = Modifier.size(52.dp),
             shape = CircleShape,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            contentPadding = PaddingValues(0.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Yellow,
                 contentColor = Color(0xFF6B5500)
             )
-        ) {
-            Text(text = "+", fontSize = 28.sp, fontWeight = FontWeight.Light)
-        }
+        ) { Text("+", fontSize = 28.sp, fontWeight = FontWeight.Light) }
 
         BottomItem("↗", "Split Bill", selectedTab == 2) { onTabSelected(2) }
         BottomItem("♙", "Profile", selectedTab == 3) { onTabSelected(3) }
@@ -544,10 +377,7 @@ private fun DashboardBottomBar(
 
 @Composable
 private fun BottomItem(
-    icon: String,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
+    icon: String, label: String, selected: Boolean, onClick: () -> Unit
 ) {
     Button(
         onClick = onClick,
@@ -555,11 +385,11 @@ private fun BottomItem(
             containerColor = Color.Transparent,
             contentColor = if (selected) DarkText else MutedText
         ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
+        contentPadding = PaddingValues(4.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = icon, fontSize = 20.sp)
-            Text(text = label, fontSize = 10.sp)
+            Text(icon, fontSize = 20.sp)
+            Text(label, fontSize = 10.sp)
         }
     }
 }

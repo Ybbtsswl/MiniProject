@@ -12,9 +12,7 @@ import androidx.navigation.navArgument
 import com.example.miniproject.data.Expense
 import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.repository.ExpenseRepository
-import com.example.miniproject.screen.DashboardScreen
-import com.example.miniproject.screen.ExpenseScreen
-import com.example.miniproject.screen.AddTransactionScreen
+import com.example.miniproject.screen.*
 import com.example.miniproject.screen.auth.AuthScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
 import io.github.jan.supabase.auth.auth
@@ -27,7 +25,10 @@ sealed class Screen(val route: String) {
     }
     object Dashboard : Screen("dashboard")
     object Expense : Screen("expense")
-    object AddTransaction : Screen("add_transaction") // unified screen
+    object AddTransaction : Screen("add_transaction")
+    object SplitBill : Screen("split_bill")
+    object AddSplitBill : Screen("add_split_bill")
+    object BillDetails : Screen("bill_details")
 }
 
 @Composable
@@ -82,18 +83,23 @@ fun AppNavHost(
             val scope = rememberCoroutineScope()
             DashboardScreen(
                 userId = userId,
+                onAdd = {
+                    navController.navigate(Screen.AddTransaction.route)
+                },
                 onExpense = {
                     navController.navigate(Screen.Expense.route)
                 },
-                onSignOut = {
-                    scope.launch {
-                        SupabaseClient.instance.auth.signOut()
-                        navController.navigate(Screen.Onboarding.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
-                        }
+                onSplitBill = {
+                    navController.navigate(Screen.SplitBill.route)
+                },
+            ) {
+                scope.launch {
+                    SupabaseClient.instance.auth.signOut()
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
-                }
-            )
+                } as Modifier
+            }
         }
 
         composable(Screen.Expense.route) {
@@ -102,7 +108,7 @@ fun AppNavHost(
                     navController.navigate(Screen.AddTransaction.route)
                 },
                 onSplitBillClick = {
-                    // TODO: navigate to Split Bill screen later
+                    navController.navigate(Screen.SplitBill.route)
                 }
             )
         }
@@ -130,12 +136,46 @@ fun AppNavHost(
                         }
                     }
                 },
-                onSaveIncome = { amount, category, description, date, _ ->
-                    // TODO: implement IncomeRepository later
-                    // For now, just go back
+                onSaveIncome = { _, _, _, _, _ ->
                     navController.popBackStack()
                 },
                 onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.SplitBill.route) {
+            SplitBillScreen(
+                onCreateSplitBill = {
+                    navController.navigate(Screen.AddSplitBill.route)
+                },
+                onBack = {
+                    navController.popBackStack()
+                },
+                onBillClick = {
+                    navController.navigate(Screen.BillDetails.route)
+                }
+            )
+        }
+
+        composable(Screen.AddSplitBill.route) {
+            AddSplitBillScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+                onCreateSplit = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.BillDetails.route) {
+            BillDetailsScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+                onSettle = {
                     navController.popBackStack()
                 }
             )
