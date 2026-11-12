@@ -58,7 +58,6 @@ private fun formatRM(amount: Double): String {
 fun SplitBillScreen(
     onBillClick: () -> Unit,
     onCreateSplitBill: () -> Unit,
-    onBack: () -> Unit = {},
     showTitle: Boolean = true
 ) {
     val splits = remember {
@@ -271,8 +270,7 @@ fun SplitBillScreenPreview() {
     MiniProjectTheme {
         SplitBillScreen(
             onBillClick = {},
-            onCreateSplitBill = {},
-            onBack = {}
+            onCreateSplitBill = {}
         )
     }
 }

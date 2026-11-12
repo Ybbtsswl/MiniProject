@@ -80,7 +80,7 @@ fun DashboardScreen(
                     onSplitBill = onSplitBill
                 )
                 1 -> ScreenPlaceholder("Analytics")
-                2 -> SplitBillScreen(onBillClick = {}, onCreateSplitBill = onAddSplitBill, onBack = {}, showTitle = true)
+                2 -> SplitBillScreen(onBillClick = {}, onCreateSplitBill = onAddSplitBill, showTitle = true)
                 3 -> ProfileScreen(userId = userId, onSignOut = onSignOut)
             }
         }
