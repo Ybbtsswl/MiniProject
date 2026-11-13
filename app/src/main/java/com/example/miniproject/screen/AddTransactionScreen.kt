@@ -24,10 +24,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.miniproject.data.Expense
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 private val expenseCategories = listOf("Food", "Transport", "Shopping", "Bills", "Entertainment", "Other")
 private val incomeCategories = listOf("Salary", "Invest", "Gift", "Customize +")
@@ -35,15 +39,18 @@ private val incomeCategories = listOf("Salary", "Invest", "Gift", "Customize +")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
-    onSaveExpense: (Double, String, String, String) -> Unit,
-    onSaveIncome: (Double, String, String, String, Boolean) -> Unit,
-    onBack: () -> Unit
+    userId: String? = null,
+    onBack: () -> Unit = {},
+    onSaveSuccess: () -> Unit = {},
+    viewModel: ExpenseViewModel = viewModel()
 ) {
-    var isExpense by remember { mutableStateOf(true) } // true = Expense, false = Income — default: Expense
+    var isExpense by remember { mutableStateOf(true) }
     var amount by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy"))) }
+    var displayDate by remember {
+        mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")))
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var repeatIncome by remember { mutableStateOf(false) }
@@ -63,7 +70,6 @@ fun AddTransactionScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Top bar: back arrow + centered title
             Box(Modifier.fillMaxWidth()) {
                 IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -78,7 +84,6 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Income / Expense Toggle
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -113,7 +118,6 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Amount Card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -138,7 +142,9 @@ fun AddTransactionScreen(
                         )
                         TextField(
                             value = amount,
-                            onValueChange = { if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it },
+                            onValueChange = {
+                                if (it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) amount = it
+                            },
                             placeholder = { Text("0.00", fontSize = 28.sp) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -167,7 +173,6 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Category
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -203,7 +208,6 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Description
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -223,13 +227,14 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Date
             Box {
                 OutlinedTextField(
-                    value = date,
+                    value = displayDate,
                     onValueChange = {},
                     readOnly = true,
-                    leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, tint = scheme.onSurfaceVariant) },
+                    leadingIcon = {
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = scheme.onSurfaceVariant)
+                    },
                     shape = fieldShape,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = scheme.surface,
@@ -240,13 +245,13 @@ fun AddTransactionScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Box(modifier = Modifier
-                    .matchParentSize()
-                    .clickable { showDatePicker = true }
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { showDatePicker = true }
                 )
             }
 
-            // Repeat toggle — only for Income
             if (!isExpense) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
@@ -281,7 +286,6 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Receipt section — only for Expense
             if (isExpense) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
@@ -335,7 +339,6 @@ fun AddTransactionScreen(
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
-            // Error message
             error?.let {
                 Text(
                     text = it,
@@ -346,28 +349,43 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Save Button
             Button(
                 onClick = {
                     val value = amount.toDoubleOrNull()
                     when {
                         value == null || value <= 0.0 -> error = "Enter a valid amount"
                         selectedCategory.isBlank() -> error = "Pick a category"
+                        userId == null -> error = "User not logged in"
                         else -> {
                             error = null
                             val formattedDate = try {
                                 val localDate = LocalDate.parse(
-                                    date,
-                                    java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
+                                    displayDate,
+                                    DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
                                 )
                                 localDate.toString()
                             } catch (e: Exception) {
-                                date
+                                displayDate
                             }
+
                             if (isExpense) {
-                                onSaveExpense(value, selectedCategory, description.trim(), formattedDate)
+                                val newExpense = Expense(
+                                    userId = userId,
+                                    amount = value,
+                                    category = selectedCategory,
+                                    description = description.trim(),
+                                    date = formattedDate
+                                )
+                                viewModel.addExpense(newExpense) { success, message ->
+                                    if (success) {
+                                        viewModel.refresh()
+                                        onSaveSuccess()
+                                    } else {
+                                        error = message
+                                    }
+                                }
                             } else {
-                                onSaveIncome(value, selectedCategory, description.trim(), formattedDate, repeatIncome)
+                                onSaveSuccess()
                             }
                         }
                     }
@@ -392,13 +410,12 @@ fun AddTransactionScreen(
         }
     }
 
-    // Date Picker Dialog
     if (showDatePicker) {
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = try {
                 LocalDate.parse(
-                    date,
-                    java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
+                    displayDate,
+                    DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
                 )
                     .atStartOfDay(ZoneOffset.UTC)
                     .toInstant()
@@ -419,8 +436,8 @@ fun AddTransactionScreen(
                             .ofEpochMilli(millis)
                             .atZone(ZoneOffset.UTC)
                             .toLocalDate()
-                        date = selectedLocalDate.format(
-                            java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
+                        displayDate = selectedLocalDate.format(
+                            DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
                         )
                     }
                     showDatePicker = false
@@ -496,9 +513,9 @@ private fun CategoryChip(
 fun AddTransactionScreenPreview() {
     MiniProjectTheme {
         AddTransactionScreen(
-            onSaveExpense = { _, _, _, _ -> },
-            onSaveIncome = { _, _, _, _, _ -> },
-            onBack = {}
+            userId = null,
+            onBack = {},
+            onSaveSuccess = {}
         )
     }
 }

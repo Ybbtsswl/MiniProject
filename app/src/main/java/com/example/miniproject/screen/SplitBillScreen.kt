@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,9 +58,9 @@ private fun formatRM(amount: Double): String {
 
 @Composable
 fun SplitBillScreen(
+    onBack: () -> Unit,
     onBillClick: () -> Unit,
-    onCreateSplitBill: () -> Unit,
-    showTitle: Boolean = true
+    onCreateSplitBill: () -> Unit
 ) {
     val splits = remember {
         listOf(
@@ -83,18 +85,37 @@ fun SplitBillScreen(
             .fillMaxSize()
             .padding(horizontal = 20.dp)
     ) {
-        // ✅ Only show title when inside dashboard tab
-        if (showTitle) {
-            Spacer(modifier = Modifier.height(4.dp))
+        // Top Bar with Back Button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to Dashboard",
+                    tint = Color(0xFF2D2D2D)
+                )
+            }
             Text(
                 text = "Split Bills",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(16.dp))
-        } else {
-            Spacer(modifier = Modifier.height(12.dp)) // Just small space for full screen
+            Spacer(modifier = Modifier.width(48.dp))
+
+            Text(
+                text = "Split Bills",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
         }
+
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Month Selector
         Row(
@@ -269,6 +290,7 @@ private fun SplitBillRow(
 fun SplitBillScreenPreview() {
     MiniProjectTheme {
         SplitBillScreen(
+            onBack = {},
             onBillClick = {},
             onCreateSplitBill = {}
         )

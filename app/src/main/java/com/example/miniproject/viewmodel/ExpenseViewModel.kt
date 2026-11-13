@@ -1,66 +1,106 @@
 package com.example.miniproject.viewmodel
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.miniproject.data.Expense
 import com.example.miniproject.repository.ExpenseRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+data class ExpenseUiState(
+    val expenses: List<Expense> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
 class ExpenseViewModel : ViewModel() {
-    private val repo = ExpenseRepository()
+    private val repository = ExpenseRepository()
 
-    private val _expenses = MutableLiveData<List<Expense>>()
-    val expenses: LiveData<List<Expense>> = _expenses
+    private val _uiState = MutableStateFlow(ExpenseUiState())
+    val uiState: StateFlow<ExpenseUiState> = _uiState
 
-    private val _loading = MutableLiveData<Boolean>()
-    val loading: LiveData<Boolean> = _loading
+    private var currentUserId: String? = null
+    private var currentMonth: String? = null
 
-    private val _message = MutableLiveData<String?>()
-    val message: LiveData<String?> = _message
-
-    // OCR extracted data holder
-    val scannedAmount = MutableLiveData<String>()
-    val scannedDate = MutableLiveData<String>()
-
+    // ✅ Load ALL expenses
     fun loadExpenses(userId: String) {
+        currentUserId = userId
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            _loading.value = true
-            repo.getExpenses(userId).onSuccess { list ->
-                _expenses.value = list
+            repository.getExpenses(userId)
+                .onSuccess { list ->
+                    _uiState.value = _uiState.value.copy(expenses = list, isLoading = false)
+                }
+                .onFailure { err ->
+                    _uiState.value = _uiState.value.copy(error = err.message, isLoading = false)
+                }
+        }
+    }
+
+    // ✅ Load expenses BY MONTH
+    fun loadExpensesByMonth(userId: String, month: String) {
+        currentUserId = userId
+        currentMonth = month
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            repository.getExpensesByMonth(userId, month)
+                .onSuccess { list ->
+                    _uiState.value = _uiState.value.copy(expenses = list, isLoading = false)
+                }
+                .onFailure { err ->
+                    _uiState.value = _uiState.value.copy(error = err.message, isLoading = false)
+                }
+        }
+    }
+
+    // ✅ ADD expense
+    fun addExpense(expense: Expense, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.addExpense(expense)
+            result.onSuccess {
+                onComplete(true, "Expense added successfully!")
+                currentUserId?.let { loadExpenses(it) } // Refresh list
             }.onFailure {
-                _message.value = "Failed to load expenses"
+                onComplete(false, it.message ?: "Failed to add expense")
             }
-            _loading.value = false
         }
     }
 
-    fun saveExpense(expense: Expense, userId: String, onResult: (Boolean) -> Unit = {}) {
+    // ✅ UPDATE expense
+    fun updateExpense(expense: Expense, onComplete: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            _loading.value = true
-            repo.addExpense(expense.copy(userId = userId))
-                .onSuccess {
-                    _message.value = "Expense saved"
-                    loadExpenses(userId)
-                    onResult(true)
+            val result = repository.updateExpense(expense)
+            result.onSuccess {
+                onComplete(true, "Expense updated successfully!")
+                currentUserId?.let {
+                    if (currentMonth != null) loadExpensesByMonth(it, currentMonth!!)
+                    else loadExpenses(it)
                 }
-                .onFailure {
-                    _message.value = "Save failed: ${it.message}"
-                    onResult(false)
-                }
-            _loading.value = false
+            }.onFailure {
+                onComplete(false, it.message ?: "Failed to update expense")
+            }
         }
     }
 
-    fun clearMessage() { _message.value = null }
+    // ✅ DELETE expense
+    fun deleteExpense(expenseId: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.deleteExpense(expenseId)
+            result.onSuccess {
+                onComplete(true, "Expense deleted successfully!")
+                currentUserId?.let { loadExpenses(it) } // Refresh list
+            }.onFailure {
+                onComplete(false, it.message ?: "Failed to delete expense")
+            }
+        }
+    }
 
-    // Simulate OCR processing — replace with actual OCR (ML Kit)
-    fun processReceiptImage(imagePath: String) {
-        _loading.value = true
-        // Simulate delay
-        scannedAmount.value = "15.90"
-        scannedDate.value = "24 Apr 2025"
-        _loading.value = false
+    // ✅ Refresh current list
+    fun refresh() {
+        currentUserId?.let {
+            if (currentMonth != null) loadExpensesByMonth(it, currentMonth!!)
+            else loadExpenses(it)
+        }
     }
 }

@@ -19,18 +19,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Expense
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.ui.theme.MoneeGreen
 import com.example.miniproject.ui.theme.MoneeRed
+import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.util.Locale
 
 private val ScreenBackground = Color(0xFFFFFFFF)
 private val CardSoft = Color(0xFFFFF9E6)
@@ -41,17 +43,26 @@ private val BorderSoft = Color(0xFFF5F5F5)
 @Composable
 fun ExpenseScreen(
     onAddClick: () -> Unit,
-    onSplitBillClick: () -> Unit = {},
-    userId: String? = null
+    onExpenseClick: (Expense) -> Unit = {},
+    userId: String? = null,
+    viewModel: ExpenseViewModel = viewModel()
 ) {
-    var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf("All") }
+    var selectedMonth by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))) }
 
-    LaunchedEffect(userId) {
-        expenses = sampleExpenses()
+    LaunchedEffect(userId, selectedMonth) {
+        userId?.let {
+            viewModel.loadExpensesByMonth(it, selectedMonth)
+        }
     }
 
-    val currentMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+    val expenses = uiState.expenses
+    val displayMonth = try {
+        LocalDate.parse("$selectedMonth-01").format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+    } catch (e: Exception) {
+        selectedMonth
+    }
     val monthlyTotal = expenses.sumOf { it.amount }
     val monthChange = -12.4
 
@@ -66,7 +77,6 @@ fun ExpenseScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Top Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -89,25 +99,39 @@ fun ExpenseScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Month Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("‹", fontSize = 20.sp, color = TextSecondary)
                 Text(
-                    text = currentMonth,
+                    text = "‹",
+                    fontSize = 20.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.clickable {
+                        val prev = LocalDate.parse("$selectedMonth-01").minusMonths(1)
+                        selectedMonth = prev.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+                    }
+                )
+                Text(
+                    text = displayMonth,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
                 )
-                Text("›", fontSize = 20.sp, color = TextSecondary)
+                Text(
+                    text = "›",
+                    fontSize = 20.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.clickable {
+                        val next = LocalDate.parse("$selectedMonth-01").plusMonths(1)
+                        selectedMonth = next.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Total Card — Softer yellow
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -136,7 +160,7 @@ fun ExpenseScreen(
                     ) {
                         Text(text = "↓ ", fontSize = 12.sp, color = MoneeGreen)
                         Text(
-                            text = "${monthChange * -1}% less than September",
+                            text = "${monthChange * -1}% less than last month",
                             fontSize = 12.sp,
                             color = MoneeGreen
                         )
@@ -146,105 +170,170 @@ fun ExpenseScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Category Summary
-            Text(
-                text = "Summary by category",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Text(
-                text = "Shown transactions · ${formatCurrency(expenses.sumOf { it.amount })}",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            CategoryBar("Transport", 120.00, monthlyTotal)
-            CategoryBar("Groceries", 86.00, monthlyTotal)
-            CategoryBar("Food & drinks", 73.50, monthlyTotal)
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Expense History Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Expense history",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = "See all",
-                    fontSize = 13.sp,
-                    color = Color(0xFFD4B848),
-                    fontWeight = FontWeight.Medium,
-                    textDecoration = TextDecoration.Underline
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Tabs
-            val tabs = listOf("All", "Food", "Shopping", "Transport")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                tabs.forEach { tab ->
-                    TabItem(
-                        label = tab,
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab }
-                    )
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFFFFD447))
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Expense List
-            val filteredExpenses = when (selectedTab) {
-                "Food" -> expenses.filter {
-                    it.category.equals("Food", ignoreCase = true) ||
-                            it.category.equals("Food & drinks", ignoreCase = true)
-                }
-                "Shopping" -> expenses.filter {
-                    it.category.equals("Shopping", ignoreCase = true)
-                }
-                "Transport" -> expenses.filter {
-                    it.category.equals("Transport", ignoreCase = true)
-                }
-                else -> expenses
-            }
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
-            ) {
-                val grouped = filteredExpenses.groupBy { getDisplayDate(it.date) }
-                grouped.forEach { (date, items) ->
-                    item {
+                uiState.error != null -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = date,
-                            fontSize = 12.sp,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            text = uiState.error ?: "Error loading data",
+                            color = MoneeRed,
+                            fontSize = 14.sp
                         )
                     }
-                    items(items) { exp ->
-                        ExpenseItemRow(exp)
+                }
+                expenses.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No expenses yet.\nTap + to add your first expense!",
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                else -> {
+                    Text(
+                        text = "Summary by category",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Tap an item to view details",
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val categoryTotals = expenses
+                        .groupBy { it.category }
+                        .mapValues { it.value.sumOf { exp -> exp.amount } }
+                        .toList()
+                        .sortedByDescending { (_, amount) -> amount }
+
+                    categoryTotals.take(3).forEach { (cat, amt) ->
+                        CategoryBar(cat, amt, monthlyTotal)
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Expense History",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val tabs = listOf("All", "Food", "Shopping", "Transport")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        tabs.forEach { tab ->
+                            TabItem(
+                                label = tab,
+                                selected = selectedTab == tab,
+                                onClick = { selectedTab = tab }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val filteredExpenses = when (selectedTab) {
+                        "Food" -> expenses.filter {
+                            it.category.equals("Food", ignoreCase = true) ||
+                                    it.category.equals("Food & drinks", ignoreCase = true)
+                        }
+                        "Shopping" -> expenses.filter {
+                            it.category.equals("Shopping", ignoreCase = true)
+                        }
+                        "Transport" -> expenses.filter {
+                            it.category.equals("Transport", ignoreCase = true)
+                        }
+                        else -> expenses
+                    }
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = 100.dp)
+                    ) {
+                        if (filteredExpenses.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 30.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No transactions in this category",
+                                        color = TextSecondary,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            val grouped = filteredExpenses.groupBy { getDisplayDate(it.date) }
+                            grouped.forEach { (date, itemsList) ->
+                                item {
+                                    Text(
+                                        text = date,
+                                        fontSize = 12.sp,
+                                        color = TextSecondary,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                    )
+                                }
+                                items(itemsList) { exp ->
+                                    ExpenseItemRow(
+                                        exp = exp,
+                                        onItemClick = { onExpenseClick(exp) },
+                                        onDelete = {
+                                            exp.id.let { id ->
+                                                viewModel.deleteExpense(id) { success, _ ->
+                                                    if (success) {
+                                                        userId?.let { viewModel.loadExpensesByMonth(it, selectedMonth) }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Add Expense FAB — Softer yellow
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -314,8 +403,13 @@ private fun CategoryBar(label: String, amount: Double, total: Double) {
     }
 }
 
+
 @Composable
-private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun TabItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     Text(
         text = label,
         fontSize = 13.sp,
@@ -330,11 +424,18 @@ private fun TabItem(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ExpenseItemRow(exp: Expense) {
+private fun ExpenseItemRow(
+    exp: Expense,
+    onItemClick: () -> Unit,
+    onDelete: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onItemClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -350,39 +451,34 @@ private fun ExpenseItemRow(exp: Expense) {
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
+            exp.description?.let {
+                Text(
+                    text = it,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+            }
             Text(
-                text = exp.description,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
-            Text(
-                text = "${exp.category} · 12:00 PM",
+                text = "${exp.category} · ${exp.date}",
                 fontSize = 11.sp,
                 color = TextSecondary
             )
         }
 
-        Column(horizontalAlignment = Alignment.End) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "- ${formatCurrency(exp.amount)}",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MoneeRed
             )
-            if (exp.isFromSplit == true) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = CardSoft,
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text(
-                        text = "Split",
-                        fontSize = 9.sp,
-                        color = Color(0xFF9A8B48),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                    )
-                }
+            TextButton(
+                onClick = onDelete,
+                colors = ButtonDefaults.textButtonColors(contentColor = MoneeRed),
+                contentPadding = PaddingValues(start = 8.dp, end = 4.dp)
+            ) {
+                Text("Delete", fontSize = 11.sp)
             }
         }
     }
@@ -393,7 +489,8 @@ private fun categoryEmoji(category: String): String = when (category.lowercase()
     "transport" -> "🚌"
     "shopping" -> "🛍️"
     "groceries" -> "🛒"
-    "bills" -> "🧾"
+    "bills" -> "📄"
+    "entertainment" -> "🎬"
     else -> "💰"
 }
 
@@ -411,33 +508,23 @@ private fun getDisplayDate(dateStr: String): String {
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
         when {
-            date.isEqual(today) -> "Today, ${date.format(DateTimeFormatter.ofPattern("d MMMM"))}"
-            date.isEqual(yesterday) -> "Yesterday, ${date.format(DateTimeFormatter.ofPattern("d MMMM"))}"
-            else -> date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy"))
+            date.isEqual(today) -> "Today"
+            date.isEqual(yesterday) -> "Yesterday"
+            else -> date.format(DateTimeFormatter.ofPattern("EEEE, d MMM yyyy"))
         }
     } catch (e: Exception) {
         dateStr
     }
 }
 
-private fun sampleExpenses(): List<Expense> {
-    val today = LocalDate.now().toString()
-    val yesterday = LocalDate.now().minusDays(1).toString()
-    return listOf(
-        Expense(id = "1", userId = "demo", amount = 28.50, category = "Food & drinks", description = "Lunch at Kopitiam", date = today, isFromSplit = false),
-        Expense(id = "2", userId = "demo", amount= 86.00, category = "Groceries", description = "Weekly groceries", date = today, isFromSplit = false),
-        Expense(id = "3", userId = "demo", amount = 45.00, category = "Food & drinks", description = "Dinner with friends", date = yesterday, isFromSplit = true),
-        Expense(id = "4", userId = "demo", amount = 120.00, category = "Transport", description = "Petrol refill", date = yesterday, isFromSplit = false)
-    )
-}
-
-@Preview(showBackground = true, name = "Expense Screen")
+@Preview(showBackground = true, showSystemUi = true, name = "Expense Screen")
 @Composable
 fun ExpenseScreenPreview() {
     MiniProjectTheme {
         ExpenseScreen(
             onAddClick = {},
-            onSplitBillClick = {}
+            onExpenseClick = {},
+            userId = null
         )
     }
 }

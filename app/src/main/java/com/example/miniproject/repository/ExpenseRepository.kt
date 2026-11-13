@@ -11,7 +11,7 @@ class ExpenseRepository {
     private val supabase = SupabaseClient.instance
     private val table = "expenses"
 
-    // CREATE
+    // CREATE — ✅ Will be used in AddExpenseScreen
     suspend fun addExpense(expense: Expense): Result<Expense> =
         withContext(Dispatchers.IO) {
             try {
@@ -24,56 +24,64 @@ class ExpenseRepository {
             }
         }
 
-    // READ — get all for user, newest first
+    // READ ALL — ✅ Used in ExpenseScreen & DashboardScreen
     suspend fun getExpenses(userId: String): Result<List<Expense>> =
         withContext(Dispatchers.IO) {
             try {
-                val list = supabase.from(table)
+                val result = supabase.from(table)
                     .select {
-                        filter { eq("user_id", userId) }
                         order("date", Order.DESCENDING)
                     }
                     .decodeList<Expense>()
-                Result.success(list)
+                    .filter { it.userId == userId }
+                Result.success(result)
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
 
-    // UPDATE
-    suspend fun updateExpense(expense: Expense, userId: String): Result<Unit> =
+    // READ BY MONTH — ✅ Will be used for month filtering
+    suspend fun getExpensesByMonth(userId: String, month: String): Result<List<Expense>> =
         withContext(Dispatchers.IO) {
             try {
-                supabase.from(table).update({
-                    set("amount", expense.amount)
-                    set("category", expense.category)
-                    set("description", expense.description)
-                    set("date", expense.date)
-                    // uncomment below if your table has these columns
-                    // set("receipt_url", expense.receiptImageUrl)
-                    // set("is_from_split", expense.isFromSplit)
-                }) {
-                    filter {
-                        eq("id", expense.id)
-                        eq("user_id", userId)
+                val all = supabase.from(table)
+                    .select {
+                        order("date", Order.DESCENDING)
                     }
+                    .decodeList<Expense>()
+                val filtered = all.filter {
+                    it.userId == userId && it.date.startsWith(month)
                 }
-                Result.success(Unit)
+                Result.success(filtered)
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
 
-    // DELETE
-    suspend fun deleteExpense(expenseId: String, userId: String): Result<Unit> =
+    // UPDATE — ✅ Will be used for editing expenses
+    suspend fun updateExpense(expense: Expense): Result<Expense> =
         withContext(Dispatchers.IO) {
             try {
-                supabase.from(table).delete {
-                    filter {
-                        eq("id", expenseId)
-                        eq("user_id", userId)
+                val result = supabase.from(table)
+                    .update(expense) {
+                        select()
+                        filter { eq("id", expense.id) }
                     }
-                }
+                    .decodeSingle<Expense>()
+                Result.success(result)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    // DELETE — ✅ Will be used in ExpenseScreen
+    suspend fun deleteExpense(expenseId: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                supabase.from(table)
+                    .delete {
+                        filter { eq("id", expenseId) }
+                    }
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)

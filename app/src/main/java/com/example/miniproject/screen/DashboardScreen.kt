@@ -80,7 +80,11 @@ fun DashboardScreen(
                     onSplitBill = onSplitBill
                 )
                 1 -> ScreenPlaceholder("Analytics")
-                2 -> SplitBillScreen(onBillClick = {}, onCreateSplitBill = onAddSplitBill, showTitle = true)
+                2 -> SplitBillScreen(
+                    onBack = { selectedTab = 0 },
+                    onBillClick = {},
+                    onCreateSplitBill = onAddSplitBill
+                )
                 3 -> ProfileScreen(userId = userId, onSignOut = onSignOut)
             }
         }
@@ -207,8 +211,7 @@ private fun BalanceCard(balance: Double) {
     }
 }
 
-@Composable
-private fun MonthlyOverview(income: Double, expenses: Double) {
+@Composable private fun MonthlyOverview(income: Double, expenses: Double) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -239,8 +242,7 @@ private fun MonthlyOverview(income: Double, expenses: Double) {
     }
 }
 
-@Composable
-private fun MonthlyMetric(
+@Composable private fun MonthlyMetric(
     label: String, amount: String, dotColor: Color,
     modifier: Modifier = Modifier, amountColor: Color = DarkText
 ) {
@@ -264,8 +266,7 @@ private fun MonthlyMetric(
     }
 }
 
-@Composable
-private fun SpendingChart(expenses: Double) {
+@Composable private fun SpendingChart(expenses: Double) {
     val values = if (expenses == 0.0) List(7) { 0 } else listOf(32, 66, 38, 70, 54, 36, 24)
     val labels = listOf("M", "T", "W", "T", "F", "S", "S")
     Row(
@@ -302,8 +303,7 @@ private fun formatCurrency(amount: Double): String {
     return "RM ${f.format(amount)}"
 }
 
-@Composable
-private fun QuickActionGrid(onExpense: () -> Unit, onSplitBill: () -> Unit) {
+@Composable private fun QuickActionGrid(onExpense: () -> Unit, onSplitBill: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickAction("✓", "Income", Modifier.weight(1f)) {}
@@ -320,8 +320,7 @@ private fun QuickActionGrid(onExpense: () -> Unit, onSplitBill: () -> Unit) {
     }
 }
 
-@Composable
-private fun QuickAction(
+@Composable private fun QuickAction(
     icon: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit
 ) {
     Button(
@@ -344,8 +343,7 @@ private fun QuickAction(
     }
 }
 
-@Composable
-private fun DashboardBottomBar(
+@Composable private fun DashboardBottomBar(
     selectedTab: Int, onTabSelected: (Int) -> Unit, onAdd: () -> Unit
 ) {
     Row(
@@ -375,8 +373,7 @@ private fun DashboardBottomBar(
     }
 }
 
-@Composable
-private fun BottomItem(
+@Composable private fun BottomItem(
     icon: String, label: String, selected: Boolean, onClick: () -> Unit
 ) {
     Button(
