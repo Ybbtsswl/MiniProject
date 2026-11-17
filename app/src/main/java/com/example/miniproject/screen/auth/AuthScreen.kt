@@ -61,7 +61,219 @@ fun AuthScreen(
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf("") }
     var isLoading by rememberSaveable { mutableStateOf(false) }
+    var showOtpScreen by rememberSaveable { mutableStateOf(false) }
+    var otp by rememberSaveable { mutableStateOf("") }
+    var showForgotScreen by rememberSaveable { mutableStateOf(false) }
+    var showRecoveryOtpScreen by rememberSaveable { mutableStateOf(false) }
+    var showResetPasswordScreen by rememberSaveable { mutableStateOf(false) }
+    var recoveryEmail by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirmNewPassword by rememberSaveable { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+
+    if (isRegister && showOtpScreen) {
+        RegistrationOtpScreen(
+            email = email.trim(),
+            otp = otp,
+            error = error,
+            isLoading = isLoading,
+            onOtpChange = {
+                otp = it.filter(Char::isDigit).take(8)
+                error = ""
+            },
+            onBack = {
+                showOtpScreen = false
+                otp = ""
+                error = ""
+            },
+            onVerify = {
+                if (otp.length != 8) {
+                    error = "Please enter the 8-digit OTP."
+                } else if (!isLoading) {
+                    isLoading = true
+                    scope.launch {
+                        onAuthenticate(
+                            AuthRequest(
+                                isRegister = true,
+                                name = name.trim(),
+                                email = email.trim(),
+                                password = password,
+                                otp = otp
+                            )
+                        ).onSuccess {
+                            showOtpScreen = false
+                            otp = ""
+                            error = ""
+                            onSuccess()
+                        }.onFailure { throwable ->
+                            error = throwable.message?.ifBlank {
+                                "The OTP is incorrect or expired."
+                            } ?: "The OTP is incorrect or expired."
+                        }
+                        isLoading = false
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    if (!isRegister && showForgotScreen) {
+        ForgotPasswordScreen(
+            email = recoveryEmail,
+            error = error,
+            isLoading = isLoading,
+            onEmailChange = {
+                recoveryEmail = it
+                error = ""
+            },
+            onBack = {
+                showForgotScreen = false
+                error = ""
+            },
+            onSendOtp = {
+                val normalizedEmail = recoveryEmail.trim()
+                if (!EmailPattern.matches(normalizedEmail)) {
+                    error = "Please enter a valid email address."
+                } else if (!isLoading) {
+                    isLoading = true
+                    scope.launch {
+                        onAuthenticate(
+                            AuthRequest(
+                                isRegister = false,
+                                name = "",
+                                email = normalizedEmail,
+                                password = "",
+                                isPasswordRecovery = true
+                            )
+                        ).onSuccess { outcome ->
+                            if (outcome == AuthOutcome.PasswordRecoveryOtpRequired) {
+                                showForgotScreen = false
+                                showRecoveryOtpScreen = true
+                                otp = ""
+                                error = "Enter the 8-digit code sent to your email."
+                            }
+                        }.onFailure { throwable ->
+                            error = throwable.message?.ifBlank {
+                                "We could not send the OTP. Please try again."
+                            } ?: "We could not send the OTP. Please try again."
+                        }
+                        isLoading = false
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    if (!isRegister && showRecoveryOtpScreen) {
+        RecoveryOtpScreen(
+            email = recoveryEmail,
+            otp = otp,
+            error = error,
+            isLoading = isLoading,
+            onOtpChange = {
+                otp = it.filter(Char::isDigit).take(8)
+                error = ""
+            },
+            onBack = {
+                showRecoveryOtpScreen = false
+                showForgotScreen = true
+                otp = ""
+                error = ""
+            },
+            onVerify = {
+                if (otp.length != 8) {
+                    error = "Please enter the 8-digit OTP."
+                } else if (!isLoading) {
+                    isLoading = true
+                    scope.launch {
+                        onAuthenticate(
+                            AuthRequest(
+                                isRegister = false,
+                                name = "",
+                                email = recoveryEmail.trim(),
+                                password = "",
+                                otp = otp,
+                                isPasswordRecovery = true
+                            )
+                        ).onSuccess { outcome ->
+                            if (outcome == AuthOutcome.PasswordRecoveryVerified) {
+                                showRecoveryOtpScreen = false
+                                showResetPasswordScreen = true
+                                otp = ""
+                                error = ""
+                            }
+                        }.onFailure { throwable ->
+                            error = throwable.message?.ifBlank {
+                                "The OTP is incorrect or expired."
+                            } ?: "The OTP is incorrect or expired."
+                        }
+                        isLoading = false
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    if (!isRegister && showResetPasswordScreen) {
+        ResetPasswordScreen(
+            password = newPassword,
+            confirmPassword = confirmNewPassword,
+            error = error,
+            isLoading = isLoading,
+            onPasswordChange = {
+                newPassword = it
+                error = ""
+            },
+            onConfirmPasswordChange = {
+                confirmNewPassword = it
+                error = ""
+            },
+            onBack = {
+                showResetPasswordScreen = false
+                showRecoveryOtpScreen = true
+                error = ""
+            },
+            onReset = {
+                error = when {
+                    newPassword.length < 6 -> "Password must be at least 6 characters."
+                    newPassword != confirmNewPassword -> "Passwords do not match."
+                    else -> ""
+                }
+                if (error.isBlank() && !isLoading) {
+                    isLoading = true
+                    scope.launch {
+                        onAuthenticate(
+                            AuthRequest(
+                                isRegister = false,
+                                name = "",
+                                email = recoveryEmail.trim(),
+                                password = "",
+                                isPasswordRecovery = true,
+                                newPassword = newPassword
+                            )
+                        ).onSuccess { outcome ->
+                            if (outcome == AuthOutcome.PasswordReset) {
+                                showResetPasswordScreen = false
+                                recoveryEmail = ""
+                                newPassword = ""
+                                confirmNewPassword = ""
+                                error = "Password reset successful. Please log in."
+                            }
+                        }.onFailure { throwable ->
+                            error = throwable.message?.ifBlank {
+                                "We could not reset your password. Please try again."
+                            } ?: "We could not reset your password. Please try again."
+                        }
+                        isLoading = false
+                    }
+                }
+            }
+        )
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -196,7 +408,9 @@ fun AuthScreen(
             if (!isRegister) {
                 TextButton(
                     onClick = {
-                        error = "Enter your email to reset your password."
+                        recoveryEmail = email.trim()
+                        showForgotScreen = true
+                        error = ""
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -260,8 +474,13 @@ fun AuthScreen(
                                 when (outcome) {
                                     AuthOutcome.SignedIn -> onSuccess()
                                     AuthOutcome.EmailConfirmationRequired -> {
-                                        error = "Account created. Please confirm your email before logging in."
+                                        showOtpScreen = true
+                                        otp = ""
+                                        error = "Enter the 8-digit code sent to your email."
                                     }
+                                    AuthOutcome.PasswordRecoveryOtpRequired,
+                                    AuthOutcome.PasswordRecoveryVerified,
+                                    AuthOutcome.PasswordReset -> Unit
                                 }
                             }.onFailure { throwable ->
                                 val message = throwable.message.orEmpty()
@@ -305,6 +524,344 @@ fun AuthScreen(
                 color = Muted,
                 fontSize = 12.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun RegistrationOtpScreen(
+    email: String,
+    otp: String,
+    error: String,
+    isLoading: Boolean,
+    onOtpChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onVerify: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Cream
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Verify your email",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Ink
+            )
+
+            Text(
+                text = "Enter the OTP sent to $email",
+                color = Muted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)
+            )
+
+            AuthField(
+                label = "8-digit OTP",
+                value = otp,
+                onValueChange = onOtpChange,
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            )
+
+            if (error.isNotBlank()) {
+                Text(
+                    text = error,
+                    color = Color(0xFFB3261E),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = onVerify,
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Yellow,
+                    contentColor = Ink
+                )
+            ) {
+                Text(
+                    text = if (isLoading) "Verifying..." else "Verify OTP",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            TextButton(onClick = onBack) {
+                Text(text = "Back to registration", color = Ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForgotPasswordScreen(
+    email: String,
+    error: String,
+    isLoading: Boolean,
+    onEmailChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onSendOtp: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Cream
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Forgot password?",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Ink
+            )
+
+            Text(
+                text = "Enter your registered email to receive an OTP.",
+                color = Muted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)
+            )
+
+            AuthField(
+                label = "Email address",
+                value = email,
+                onValueChange = onEmailChange,
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Done
+            )
+
+            if (error.isNotBlank()) {
+                Text(
+                    text = error,
+                    color = Color(0xFFB3261E),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = onSendOtp,
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Yellow,
+                    contentColor = Ink
+                )
+            ) {
+                Text(
+                    text = if (isLoading) "Sending..." else "Send OTP",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            TextButton(onClick = onBack) {
+                Text(text = "Back to login", color = Ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecoveryOtpScreen(
+    email: String,
+    otp: String,
+    error: String,
+    isLoading: Boolean,
+    onOtpChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onVerify: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Cream
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Verify your email",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Ink
+            )
+
+            Text(
+                text = "Enter the OTP sent to $email",
+                color = Muted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)
+            )
+
+            AuthField(
+                label = "8-digit OTP",
+                value = otp,
+                onValueChange = onOtpChange,
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            )
+
+            if (error.isNotBlank()) {
+                Text(
+                    text = error,
+                    color = Color(0xFFB3261E),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = onVerify,
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Yellow,
+                    contentColor = Ink
+                )
+            ) {
+                Text(
+                    text = if (isLoading) "Verifying..." else "Verify OTP",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            TextButton(onClick = onBack) {
+                Text(text = "Back to email", color = Ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResetPasswordScreen(
+    password: String,
+    confirmPassword: String,
+    error: String,
+    isLoading: Boolean,
+    onPasswordChange: (String) -> Unit,
+    onConfirmPasswordChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onReset: () -> Unit
+) {
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Cream
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp, vertical = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Reset password",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Ink
+            )
+
+            Text(
+                text = "Create a new password for your account.",
+                color = Muted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp, bottom = 24.dp)
+            )
+
+            PasswordField(
+                label = "New password",
+                value = password,
+                onValueChange = onPasswordChange,
+                visible = passwordVisible,
+                onToggle = { passwordVisible = !passwordVisible },
+                imeAction = ImeAction.Next
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            PasswordField(
+                label = "Confirm new password",
+                value = confirmPassword,
+                onValueChange = onConfirmPasswordChange,
+                visible = passwordVisible,
+                onToggle = { passwordVisible = !passwordVisible },
+                imeAction = ImeAction.Done
+            )
+
+            if (error.isNotBlank()) {
+                Text(
+                    text = error,
+                    color = if (error.startsWith("Password reset successful")) {
+                        Color(0xFF2E7D32)
+                    } else {
+                        Color(0xFFB3261E)
+                    },
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = onReset,
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Yellow,
+                    contentColor = Ink
+                )
+            ) {
+                Text(
+                    text = if (isLoading) "Saving..." else "Reset password",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            TextButton(onClick = onBack) {
+                Text(text = "Back to OTP", color = Ink)
+            }
         }
     }
 }
