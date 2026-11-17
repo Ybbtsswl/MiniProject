@@ -5,10 +5,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Category(
-    val id: String = "",
+    @SerialName("category_id") val categoryId: String = "",
     val name: String = "",
-    val icon: String = "",
-    val userId: String? = null,
-    @SerialName("created_at")
-    val createdAt: String = ""
+    val icon: String? = null,
+    val description: String? = null,
+    @SerialName("user_id") val userId: String? = null
 )

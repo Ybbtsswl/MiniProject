@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Expense
 import com.example.miniproject.ui.theme.MiniProjectTheme
@@ -33,7 +34,6 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-private val expenseCategories = listOf("Food", "Transport", "Shopping", "Bills", "Entertainment", "Other")
 private val incomeCategories = listOf("Salary", "Invest", "Gift", "Customize +")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +46,7 @@ fun AddTransactionScreen(
 ) {
     var isExpense by remember { mutableStateOf(true) }
     var amount by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("") }
+    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
     var description by remember { mutableStateOf("") }
     var displayDate by remember {
         mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")))
@@ -54,6 +54,15 @@ fun AddTransactionScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var repeatIncome by remember { mutableStateOf(false) }
+
+    // Load categories from ViewModel
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val isLoadingCategories by viewModel.isLoadingCategories.collectAsStateWithLifecycle()
+
+    // ✅ Load categories when screen opens
+    LaunchedEffect(userId) {
+        viewModel.loadCategories(userId)
+    }
 
     val scheme = MaterialTheme.colorScheme
     val fieldShape = RoundedCornerShape(12.dp)
@@ -101,7 +110,7 @@ fun AddTransactionScreen(
                                 .background(if (selected) scheme.primary else Color.Transparent)
                                 .clickable {
                                     isExpense = label == "Expense"
-                                    selectedCategory = ""
+                                    selectedCategoryId = null
                                 }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -182,9 +191,10 @@ fun AddTransactionScreen(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (selectedCategory.isNotEmpty()) {
+                if (selectedCategoryId != null) {
+                    val selectedCat = categories.find { it.categoryId == selectedCategoryId }
                     Text(
-                        text = "Selected: $selectedCategory",
+                        text = "Selected: ${selectedCat?.name ?: ""}",
                         fontSize = 12.sp,
                         color = scheme.primary,
                         fontWeight = FontWeight.Medium
@@ -194,15 +204,31 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val categories = if (isExpense) expenseCategories else incomeCategories
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(categories) { name ->
-                    CategoryChip(
-                        label = name,
-                        selected = selectedCategory == name,
-                        onClick = { selectedCategory = name },
-                        isExpense = isExpense
-                    )
+            if (isExpense) {
+                if (isLoadingCategories) {
+                    Text(text = "Loading categories...", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (categories.isEmpty()) {
+                    Text(text = "No categories found", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(categories) { cat ->
+                            CategoryChip(
+                                category = cat,
+                                selected = selectedCategoryId == cat.categoryId,
+                                onClick = { selectedCategoryId = cat.categoryId }
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(incomeCategories) { name ->
+                        IncomeCategoryChip(
+                            label = name,
+                            selected = selectedCategoryId == name,
+                            onClick = { selectedCategoryId = name }
+                        )
+                    }
                 }
             }
 
@@ -339,6 +365,7 @@ fun AddTransactionScreen(
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
+
             error?.let {
                 Text(
                     text = it,
@@ -354,7 +381,7 @@ fun AddTransactionScreen(
                     val value = amount.toDoubleOrNull()
                     when {
                         value == null || value <= 0.0 -> error = "Enter a valid amount"
-                        selectedCategory.isBlank() -> error = "Pick a category"
+                        selectedCategoryId == null && isExpense -> error = "Pick a category"
                         userId == null -> error = "User not logged in"
                         else -> {
                             error = null
@@ -369,16 +396,18 @@ fun AddTransactionScreen(
                             }
 
                             if (isExpense) {
+                                val selectedCat = categories.find { it.categoryId == selectedCategoryId }
+
                                 val newExpense = Expense(
                                     userId = userId,
                                     amount = value,
-                                    category = selectedCategory,
-                                    description = description.trim(),
+                                    categoryId = selectedCategoryId?:"",
+                                    category = selectedCat?.name ?: "",
+                                    description = description.trim().ifEmpty { "" },
                                     date = formattedDate
                                 )
                                 viewModel.addExpense(newExpense) { success, message ->
                                     if (success) {
-                                        viewModel.refresh()
                                         onSaveSuccess()
                                     } else {
                                         error = message
@@ -467,25 +496,46 @@ fun AddTransactionScreen(
 
 @Composable
 private fun CategoryChip(
+    category: com.example.miniproject.data.Category,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val icon = category.icon ?: "•"
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        border = if (!selected) BorderStroke(1.dp, Color(0xFFE8E8E8)) else null
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = icon, fontSize = 16.sp)
+            Text(
+                text = category.name,
+                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun IncomeCategoryChip(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit,
-    isExpense: Boolean
+    onClick: () -> Unit
 ) {
     val icon = when (label) {
-        "Food" -> "🍽️"
-        "Transport" -> "🚗"
-        "Shopping" -> "🛍️"
-        "Bills" -> "📄"
-        "Entertainment" -> "🎬"
-        "Other" -> "⋮"
         "Salary" -> "💰"
         "Invest" -> "📈"
         "Gift" -> "🎁"
         "Customize +" -> "⚙️"
         else -> "•"
     }
-
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -519,3 +569,4 @@ fun AddTransactionScreenPreview() {
         )
     }
 }
+

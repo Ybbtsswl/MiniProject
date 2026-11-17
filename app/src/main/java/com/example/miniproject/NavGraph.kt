@@ -1,23 +1,10 @@
 package com.example.miniproject
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -29,8 +16,7 @@ import com.example.miniproject.screen.auth.AuthScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
-import com.example.miniproject.data.Expense
-import com.example.miniproject.viewmodel.ExpenseViewModel
+
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
@@ -45,9 +31,6 @@ sealed class Screen(val route: String) {
     object SplitBill : Screen("split_bill")
     object AddSplitBill : Screen("add_split_bill")
     object BillDetails : Screen("bill_details")
-    object ExpenseDetail : Screen("expense_detail/{expenseId}") {
-        fun createRoute(expenseId: String) = "expense_detail/$expenseId"
-    }
 }
 
 @Composable
@@ -127,12 +110,6 @@ fun AppNavHost(
                 userId = userId,
                 onAddClick = {
                     userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
-                },
-                onExpenseClick = { expense ->
-                    // ✅ ONLY pass the ID — NO object through savedStateHandle!
-                    if (expense.id.isNotEmpty()) {
-                        navController.navigate(Screen.ExpenseDetail.createRoute(expense.id))
-                    }
                 }
             )
         }
@@ -150,44 +127,6 @@ fun AppNavHost(
                 onSaveSuccess = { navController.popBackStack() }
             )
         }
-
-        composable(
-            route = Screen.ExpenseDetail.route,
-            arguments = listOf(navArgument("expenseId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val expenseId = backStackEntry.arguments?.getString("expenseId")
-            val viewModel: ExpenseViewModel = viewModel()
-            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-            val expense = uiState.expenses.find { it.id == expenseId }
-
-            when {
-                expense == null && uiState.isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFFFFD447))
-                    }
-                }
-                expense != null -> {
-                    ExpenseDetailScreen(
-                        expense = expense,
-                        onBack = { navController.popBackStack() },
-                        onSaveSuccess = { navController.popBackStack() }
-                    )
-                }
-                else -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Expense not found", color = Color.Black)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { navController.popBackStack() }) {
-                                Text("Go Back")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
 
         composable(Screen.SplitBill.route) {
             SplitBillScreen(

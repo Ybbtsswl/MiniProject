@@ -5,14 +5,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Expense(
-    val id: String = "",
-    @SerialName ("user_id") val userId: String = "",
+    @SerialName("expense_id") val expenseId: String = "",
+    @SerialName("user_id") val userId: String = "",
+    @SerialName("category_id") val categoryId: String ="",
     val amount: Double = 0.0,
+    val category: String = "",
     val date: String = "",
-    val description: String? = null,
-    @SerialName("receipt_url")
-    val receiptImageUrl: String? = null,
-    val isFromSplit: Boolean = false,
-    @SerialName("category_id")
-    val categoryId: String = ""
+    val description: String,
+    @SerialName("is_from_split") val isFromSplit: Boolean = false,
+    @SerialName("split_bill_id") val splitBillId: String? = null,
+    @SerialName("created_at") val createdAt: String = ""
 )
