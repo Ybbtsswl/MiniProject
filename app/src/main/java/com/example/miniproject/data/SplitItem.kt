@@ -5,10 +5,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SplitItem(
-    val id: String = "",
+    @SerialName("split_item_id") val splitItemId: String = "",
     @SerialName("split_bill_id") val splitBillId: String = "",
     val description: String = "",
     val amount: Double = 0.0,
-    @SerialName("created_at") val createdAt: String = ""
+    @SerialName("payer_id") val payerId: String? = null
 )
 

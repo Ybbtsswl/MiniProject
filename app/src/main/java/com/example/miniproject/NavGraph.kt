@@ -1,10 +1,19 @@
 package com.example.miniproject
 
-
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -14,9 +23,14 @@ import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.screen.*
 import com.example.miniproject.screen.auth.AuthScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
+import com.example.miniproject.viewmodel.SplitBillViewModel
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.withContext
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
@@ -28,14 +42,21 @@ sealed class Screen(val route: String) {
     object AddTransaction : Screen("add_transaction/{userId}") {
         fun createRoute(userId: String) = "add_transaction/$userId"
     }
-    object SplitBill : Screen("split_bill")
-    object AddSplitBill : Screen("add_split_bill")
-    object BillDetails : Screen("bill_details")
+    object SplitBill : Screen("split_bill/{userId}") {
+        fun createRoute(userId: String) = "split_bill/$userId"
+    }
+    object AddSplitBill : Screen("add_split_bill/{userId}") {
+        fun createRoute(userId: String) = "add_split_bill/$userId"
+    }
+    object SplitBillDetail : Screen("split_bill_detail/{billId}") {
+        fun createRoute(billId: String) = "split_bill_detail/$billId"
+    }
 }
 
 @Composable
 fun AppNavHost(
     navController: NavHostController,
+    supabaseClient: SupabaseClient,
     modifier: Modifier = Modifier,
     startDestination: String = Screen.Onboarding.route
 ) {
@@ -81,8 +102,9 @@ fun AppNavHost(
         }
 
         composable(Screen.Dashboard.route) {
-            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
             val scope = rememberCoroutineScope()
+
             DashboardScreen(
                 userId = userId,
                 onAdd = {
@@ -92,11 +114,14 @@ fun AppNavHost(
                     navController.navigate(Screen.Expense.route)
                 },
                 onSplitBill = {
-                    navController.navigate(Screen.SplitBill.route)
+                    userId?.let { navController.navigate(Screen.SplitBill.createRoute(it)) }
+                },
+                onAddSplitBill = {
+                    userId?.let { navController.navigate(Screen.AddSplitBill.createRoute(it)) }
                 }
             ) {
                 scope.launch {
-                    SupabaseClient.instance.auth.signOut()
+                    supabaseClient.auth.signOut()
                     navController.navigate(Screen.Onboarding.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
@@ -105,7 +130,7 @@ fun AppNavHost(
         }
 
         composable(Screen.Expense.route) {
-            val userId = SupabaseClient.instance.auth.currentUserOrNull()?.id
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
             ExpenseScreen(
                 userId = userId,
                 onAddClick = {
@@ -117,10 +142,10 @@ fun AppNavHost(
         composable(
             route = Screen.AddTransaction.route,
             arguments = listOf(
-                navArgument("userId") { type = NavType.StringType; nullable = true }
+                navArgument("userId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val userId = backStackEntry.arguments?.getString("userId")
+            val userId = backStackEntry.arguments?.getString("userId")!!
             AddTransactionScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
@@ -128,38 +153,168 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.SplitBill.route) {
-            SplitBillScreen(
-                onCreateSplitBill = {
-                    navController.navigate(Screen.AddSplitBill.route)
-                },
-                onBack = {
-                    navController.popBackStack()
-                },
-                onBillClick = {
-                    navController.navigate(Screen.BillDetails.route)
-                }
+        composable(
+            route = Screen.AddSplitBill.route,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType }
             )
-        }
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId")!!
+            val splitBillViewModel: SplitBillViewModel = viewModel()
+            val scope = rememberCoroutineScope()
 
-        composable(Screen.AddSplitBill.route) {
             AddSplitBillScreen(
+                userId = userId,
+                viewModel = splitBillViewModel,
                 onBack = { navController.popBackStack() },
-                onCreateSplit = {
-                    navController.popBackStack()
+                onCreateSplit = { bill, members, items, allocations ->
+                    splitBillViewModel.createSplitBill(
+                        bill = bill,
+                        members = members,
+                        items = items,
+                        allocations = allocations,
+                        onSuccess = { navController.popBackStack() },
+                        onError = { /* handle error */ }
+                    )
+                },
+                onSaveGroup = { group ->
+                    kotlinx.coroutines.runBlocking {
+                        splitBillViewModel.createGroup(group)
+                    }
+                },
+
+                onLoadGroup = { groupId ->
+                    kotlinx.coroutines.runBlocking {
+                        splitBillViewModel.loadGroupMembers(groupId)
+                    }
+                },
+
+                onLookupUser = { lookupUserId ->
+                    try {
+                        val userJson = supabaseClient.postgrest["profiles"]
+                            .select { filter { eq("id", lookupUserId) }; limit(1) }
+                            .decodeSingleOrNull<kotlinx.serialization.json.JsonObject>()
+
+                        if (userJson != null) {
+                            val name = userJson["username"]?.toString()
+                                ?.removeSurrounding("\"")
+                                ?: userJson["name"]?.toString()
+                                    ?.removeSurrounding("\"")
+                            if (!name.isNullOrEmpty()) {
+                                Result.success(name)
+                            } else {
+                                Result.failure(Exception("Name not found"))
+                            }
+                        } else {
+                            Result.failure(Exception("User not found"))
+                        }
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
                 }
             )
         }
 
-        composable(Screen.BillDetails.route) {
-            BillDetailsScreen(
-                onBack = {
-                    navController.popBackStack()
-                },
-                onSettle = {
-                    navController.popBackStack()
-                }
+
+        composable(
+            route = Screen.SplitBill.route,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType }
             )
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId")!!
+            val splitBillViewModel: SplitBillViewModel = viewModel()
+
+            LaunchedEffect(userId) {
+                splitBillViewModel.loadGroups(userId)
+            }
+
+            val groupsState by splitBillViewModel.uiState.collectAsState()
+
+            SplitBillScreen(
+                userId = userId,
+                viewModel = splitBillViewModel,
+                onBillClick = { billId ->
+                    navController.navigate(Screen.SplitBillDetail.createRoute(billId))
+                },
+                onCreateClick = {
+                    navController.navigate(Screen.AddSplitBill.createRoute(userId))
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.SplitBillDetail.route,
+            arguments = listOf(
+                navArgument("billId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val billId = backStackEntry.arguments?.getString("billId")!!
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
+            val splitBillViewModel: SplitBillViewModel = viewModel()
+            val scope = rememberCoroutineScope()
+
+            var detailData by remember { mutableStateOf<SplitBillViewModel.BillDetailData?>(null) }
+            var isLoading by remember { mutableStateOf(true) }
+
+            LaunchedEffect(billId) {
+                scope.launch {
+                    val result = splitBillViewModel.loadBillDetail(billId)
+                    detailData = result.getOrNull()
+                    isLoading = false
+                }
+            }
+
+            when {
+                isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                detailData != null -> {
+                    val data = detailData!!
+                    SplitBillDetailScreen(
+                        splitBill = data.bill,
+                        members = data.members,
+                        items = data.items,
+                        allocations = data.allocations,
+                        currentUserId = userId ?: "",
+                        onBack = { navController.popBackStack() },
+                        onSettleAllocation = { allocationId ->
+                            scope.launch {
+                                if (userId != null) {
+                                    splitBillViewModel.settleAllocation(
+                                        splitAllocationId = allocationId,
+                                        billId = billId,
+                                        userId = userId,
+                                        selectedMonth = java.time.LocalDate.now()
+                                    )
+                                    // Refresh data
+                                    detailData = splitBillViewModel.loadBillDetail(billId).getOrNull()
+                                }
+                            }
+                        },
+                        onSettleBill = {
+                            scope.launch {
+                                if (userId != null) {
+                                    splitBillViewModel.settleBill(
+                                        billId = billId,
+                                        userId = userId,
+                                        selectedMonth = java.time.LocalDate.now()
+                                    )
+                                    navController.popBackStack()
+                                }
+                            }
+                        }
+                    )
+                }
+                else -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.Text("Bill not found")
+                    }
+                }
+            }
         }
     }
 }

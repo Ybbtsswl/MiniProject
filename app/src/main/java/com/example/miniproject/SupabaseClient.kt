@@ -7,12 +7,9 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.PropertyConversionMethod
 
 object SupabaseClient {
-    private const val PROJECT_URL = "https://zjgxmokfevzsjcfgyowk.supabase.co"
-    private const val ANON_KEY = "sb_publishable_jGX42-TiobZfhdT9ydmWkA_YmWxK94N"
-
     val instance: SupabaseClient = createSupabaseClient(
-        supabaseUrl = PROJECT_URL,
-        supabaseKey = ANON_KEY
+        supabaseUrl = "https://zjgxmokfevzsjcfgyowk.supabase.co",
+        supabaseKey = "sb_publishable_jGX42-TiobZfhdT9ydmWkA_YmWxK94N"
     ) {
         install(Auth)
         install(Postgrest) {

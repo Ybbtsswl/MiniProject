@@ -16,6 +16,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 AppNavHost(
                     navController = navController,
+                    supabaseClient = SupabaseClient.instance,
                     modifier = Modifier.fillMaxSize()
                 )
             }

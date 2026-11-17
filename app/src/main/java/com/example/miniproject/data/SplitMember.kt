@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SplitMember(
-    val id: String = "",
+    @SerialName("split_member_id") val splitMemberId: String = "",
     @SerialName("split_bill_id") val splitBillId: String = "",
     @SerialName("user_id") val userId: String? = null,
     val name: String = "",

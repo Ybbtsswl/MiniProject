@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Expense
 import com.example.miniproject.repository.ExpenseRepository
 import java.text.NumberFormat
@@ -81,9 +82,11 @@ fun DashboardScreen(
                 )
                 1 -> ScreenPlaceholder("Analytics")
                 2 -> SplitBillScreen(
-                    onBack = { selectedTab = 0 },
-                    onBillClick = {},
-                    onCreateSplitBill = onAddSplitBill
+                    userId = userId ?: "",
+                    viewModel = viewModel(),
+                    onBillClick = { },
+                    onCreateClick = onAddSplitBill,
+                    onBack = { selectedTab = 0 }
                 )
                 3 -> ProfileScreen(userId = userId, onSignOut = onSignOut)
             }
