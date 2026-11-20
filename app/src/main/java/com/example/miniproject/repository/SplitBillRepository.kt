@@ -1,6 +1,7 @@
 package com.example.miniproject.repository
 
 import com.example.miniproject.SupabaseClient as MySupabaseClient
+import com.example.miniproject.data.GroupMember
 import com.example.miniproject.data.ParticipantGroup
 import com.example.miniproject.data.SplitBill
 import com.example.miniproject.data.SplitItem
@@ -9,6 +10,11 @@ import com.example.miniproject.data.SplitAllocation
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 class SplitBillRepository(
     private val supabase: io.github.jan.supabase.SupabaseClient = MySupabaseClient.instance
@@ -26,6 +32,19 @@ class SplitBillRepository(
                     .decodeList<SplitBill>()
                 Result.success(bills)
             } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getSplitBill(splitBillId: String): Result<SplitBill> =
+        withContext(Dispatchers.IO) {
+            try {
+                val bill = supabase.postgrest["split_bills"]
+                    .select { filter { eq("split_bill_id", splitBillId) } }
+                    .decodeSingle<SplitBill>()
+                Result.success(bill)
+            } catch (e: Exception) {
+                android.util.Log.e("SplitBillRepo", "getSplitBill failed", e)
                 Result.failure(e)
             }
         }
@@ -188,7 +207,6 @@ class SplitBillRepository(
             }
         }
 
-    // ✅ NEW: Get allocations for ONE specific item (used in settlement calculation)
     suspend fun getAllocationsByItem(splitItemId: String): Result<List<SplitAllocation>> =
         withContext(Dispatchers.IO) {
             try {
@@ -230,7 +248,12 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 supabase.postgrest["split_allocations"]
-                    .update(mapOf("is_paid" to true, "paid_at" to paidAt)) {
+                    // mapOf(Boolean, Long) becomes Map<String, Any>, which has no serializer
+                    .update(buildJsonObject {
+                        put("is_paid", true)
+                        // timestamp column: send ISO-8601 (e.g. 2026-11-20T03:50:00Z), not epoch millis
+                        put("paid_at", java.time.Instant.ofEpochMilli(paidAt).toString())
+                    }) {
                         filter { eq("split_allocation_id", splitAllocationId) }
                     }
                 Result.success(Unit)
@@ -277,6 +300,39 @@ class SplitBillRepository(
             }
         }
 
+    suspend fun createGroupWithMembers(
+        group: ParticipantGroup,
+        members: List<GroupMember>
+    ): Result<String> =
+        withContext(Dispatchers.IO) {
+            var groupId: String? = null
+            try {
+                groupId = createGroup(group).getOrThrow()
+                if (members.isNotEmpty()) {
+                    supabase.postgrest["participant_group_members"]
+                        .insert(members.map { it.copy(groupId = groupId) })
+                }
+                Result.success(groupId)
+            } catch (e: Exception) {
+                android.util.Log.e("SplitBillRepo", "createGroupWithMembers failed", e)
+                groupId?.let { deleteGroup(it) }
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getGroupMembers(groupId: String): Result<List<GroupMember>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val list = supabase.postgrest["participant_group_members"]
+                    .select { filter { eq("group_id", groupId) } }
+                    .decodeList<GroupMember>()
+                Result.success(list)
+            } catch (e: Exception) {
+                android.util.Log.e("SplitBillRepo", "getGroupMembers failed", e)
+                Result.failure(e)
+            }
+        }
+
     // ==========================================
     // BATCH CREATE
     // ==========================================
@@ -289,12 +345,44 @@ class SplitBillRepository(
 
     suspend fun createCompleteSplitBill(data: SplitBillData): Result<String> =
         withContext(Dispatchers.IO) {
+            var billId: String? = null
             try {
-                val billId = createSplitBill(data.bill).getOrThrow()
+                billId = createSplitBill(data.bill).getOrThrow()
                 data.members.forEach { addMember(it.copy(splitBillId = billId)).getOrThrow() }
                 data.items.forEach { addItem(it.copy(splitBillId = billId)).getOrThrow() }
                 data.allocations.forEach { addAllocation(it).getOrThrow() }
                 Result.success(billId)
+            } catch (e: Exception) {
+                android.util.Log.e("SplitBillRepo", "createCompleteSplitBill failed", e)
+                // Don't leave a half-created bill behind
+                billId?.let { deleteSplitBill(it) }
+                Result.failure(e)
+            }
+        }
+
+    // ==========================================
+    // USER SEARCH
+    // ==========================================
+    // Map<String, Any> can't be decoded by kotlinx.serialization (Any has no serializer),
+    // which made every search throw. Decode to JsonObject and flatten to strings instead.
+    suspend fun searchUserById(userId: String): Result<Map<String, String>?> =
+        withContext(Dispatchers.IO) {
+            try {
+                val user = supabase.postgrest["profiles"]
+                    .select {
+                        filter { eq("id", userId) }
+                        limit(1)
+                    }
+                    .decodeSingleOrNull<JsonObject>()
+
+                android.util.Log.d("SplitBillRepo", "searchUserById($userId) -> $user")
+                Result.success(
+                    user?.entries
+                        ?.mapNotNull { (key, value) ->
+                            (value as? JsonPrimitive)?.contentOrNull?.let { key to it }
+                        }
+                        ?.toMap()
+                )
             } catch (e: Exception) {
                 Result.failure(e)
             }

@@ -3,7 +3,6 @@ package com.example.miniproject.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,14 +14,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.miniproject.data.SplitAllocation
 import com.example.miniproject.data.SplitBill
 import com.example.miniproject.data.SplitItem
 import com.example.miniproject.data.SplitMember
-import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.ui.theme.MoneeGreen
 import com.example.miniproject.ui.theme.MoneeYellow
 import java.text.NumberFormat
@@ -49,17 +46,32 @@ fun SplitBillDetailScreen(
     items: List<SplitItem>,
     allocations: List<SplitAllocation>,
     currentUserId: String = "",
+    errorMessage: String? = null,
     onBack: () -> Unit = {},
-    onSettleAllocation: (String) -> Unit = {},
+    onSettleMember: (String) -> Unit = {},   // memberId -> marks all of their shares paid
     onSettleBill: () -> Unit = {}
 ) {
-    // Find current user's member ID and allocation
-    val currentMemberId = members.find { it.userId == currentUserId }?.splitMemberId
-    val currentAlloc = allocations.find { it.splitMemberId == currentMemberId }
-    val isPayer = members.firstOrNull()?.userId == currentUserId
-    val isSettled = currentAlloc?.isPaid == true
+    // The creator is the payer: they are saved as payerId on every item
+    val payerMemberId = items.firstNotNullOfOrNull { it.payerId }
+    val payer = members.find { it.splitMemberId == payerMemberId } ?: members.firstOrNull()
+    val payerName = payer?.name ?: ""
 
-    // Items with their assigned members
+    val currentMember = if (currentUserId.isNotEmpty()) members.find { it.userId == currentUserId } else null
+    val currentMemberId = currentMember?.splitMemberId
+    val isPayer = currentMemberId != null && currentMemberId == payer?.splitMemberId
+
+    // A member has one allocation per item, so add them all up
+    val myAllocs = allocations.filter { it.splitMemberId == currentMemberId }
+    val myShare = myAllocs.sumOf { it.shareAmount }
+    val isSettled = myAllocs.isNotEmpty() && myAllocs.all { it.isPaid }
+
+    val isBillSettled = splitBill.status.equals("SETTLED", ignoreCase = true)
+
+    val others = members.filter { it.splitMemberId != payer?.splitMemberId }
+    val pendingOthers = others.count { m ->
+        allocations.filter { it.splitMemberId == m.splitMemberId }.any { !it.isPaid }
+    }
+
     val itemsWithMembers = items.map { item ->
         val itemAllocs = allocations.filter { it.splitItemId == item.splitItemId }
         val itemMembers = itemAllocs.mapNotNull { alloc ->
@@ -92,16 +104,21 @@ fun SplitBillDetailScreen(
         ) {
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
-            // 📌 BILL SUMMARY CARD
+            errorMessage?.let { msg ->
+                item {
+                    Text(msg, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                }
+            }
+
             item {
                 BillSummaryCard(
                     bill = splitBill,
                     memberCount = members.size,
-                    payerName = members.firstOrNull()?.name ?: ""
+                    payerName = payerName,
+                    isSettled = isBillSettled
                 )
             }
 
-            // 📋 ITEMIZED BILL
             item {
                 ItemizedBillSection(
                     itemsWithMembers = itemsWithMembers,
@@ -109,27 +126,27 @@ fun SplitBillDetailScreen(
                 )
             }
 
-            // 👥 CONTRIBUTIONS
             item {
                 ContributionsSection(
                     members = members,
                     allocations = allocations,
-                    currentMemberId = currentMemberId
+                    currentMemberId = currentMemberId,
+                    payerMemberId = payer?.splitMemberId,
+                    canMarkOthersPaid = isPayer && !isBillSettled,
+                    onMarkPaid = onSettleMember
                 )
             }
 
-            // 💰 YOUR SETTLEMENT
             item {
                 YourSettlementSection(
-                    currentAlloc = currentAlloc,
-                    payerName = members.firstOrNull()?.name ?: "",
+                    isBillSettled = isBillSettled,
+                    isMember = currentMemberId != null,
                     isPayer = isPayer,
+                    payerName = payerName,
+                    myShare = myShare,
                     isSettled = isSettled,
-                    onSettleAllocation = {
-                        if (currentAlloc != null) {
-                            onSettleAllocation(currentAlloc.splitAllocationId)
-                        }
-                    },
+                    pendingOthers = pendingOthers,
+                    onPay = { currentMemberId?.let(onSettleMember) },
                     onSettleBill = onSettleBill
                 )
             }
@@ -143,7 +160,7 @@ fun SplitBillDetailScreen(
 // 🧩 BILL SUMMARY CARD
 // ==========================================
 @Composable
-fun BillSummaryCard(bill: SplitBill, memberCount: Int, payerName: String) {
+fun BillSummaryCard(bill: SplitBill, memberCount: Int, payerName: String, isSettled: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -152,11 +169,19 @@ fun BillSummaryCard(bill: SplitBill, memberCount: Int, payerName: String) {
         )
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
-            Text(
-                text = bill.title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = bill.title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isSettled) StatusBadge(text = "✓ Settled", isSettled = true)
+            }
             Text(
                 text = "${bill.billDate} · $memberCount people",
                 fontSize = 13.sp,
@@ -189,21 +214,29 @@ fun ItemizedBillSection(
     itemsWithMembers: List<Pair<SplitItem, List<String>>>,
     totalAmount: Double
 ) {
+    val subtotal = itemsWithMembers.sumOf { (item, _) -> item.amount * item.quantity }
+    val taxAndCharges = (totalAmount - subtotal).coerceAtLeast(0.0)
+
     Column {
         Text("Itemized Bill", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(12.dp))
 
         itemsWithMembers.forEach { (item, assignees) ->
             ItemRow(
-                name = item.description,
+                name = if (item.quantity > 1) "${item.description} ×${item.quantity}" else item.description,
                 assignedTo = if (assignees.size <= 2) assignees.joinToString(", ")
                 else "${assignees.take(2).joinToString(", ")} +${assignees.size - 2}",
-                amount = item.amount
+                amount = item.amount * item.quantity
             )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
+        TextRow(label = "Subtotal", value = formatCurrency(subtotal))
+        if (taxAndCharges > 0.005) {
+            TextRow(label = "SST & service charge", value = formatCurrency(taxAndCharges))
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -242,46 +275,53 @@ fun ItemRow(name: String, assignedTo: String, amount: Double) {
 fun ContributionsSection(
     members: List<SplitMember>,
     allocations: List<SplitAllocation>,
-    currentMemberId: String?
+    currentMemberId: String?,
+    payerMemberId: String?,
+    canMarkOthersPaid: Boolean,
+    onMarkPaid: (String) -> Unit
 ) {
     Column {
         Text("Contributions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Header
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Person", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-            Text("Share", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(70.dp), textAlign = TextAlign.Center)
-            Text("Paid", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(70.dp), textAlign = TextAlign.Center)
+            Text("Share", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(80.dp), textAlign = TextAlign.Center)
+            Text("Status", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(90.dp), textAlign = TextAlign.Center)
         }
         Spacer(modifier = Modifier.height(8.dp))
 
         members.forEach { member ->
-            val share = allocations
-                .filter { it.splitMemberId == member.splitMemberId }
-                .sumOf { it.shareAmount }
-            val isPaid = allocations
-                .filter { it.splitMemberId == member.splitMemberId }
-                .all { it.isPaid }
-            val isPayer = member == members.firstOrNull()
-            val displayName = if (member.splitMemberId == currentMemberId) "${member.name} (you)" else member.name
+            val memberAllocs = allocations.filter { it.splitMemberId == member.splitMemberId }
+            val isPayer = member.splitMemberId == payerMemberId
+            val displayName =
+                if (member.splitMemberId == currentMemberId) "${member.name} (you)" else member.name
 
             ContributionRow(
                 name = displayName,
-                share = share,
-                isPaid = if (isPayer) null else isPaid,
-                isPayer = isPayer
+                share = memberAllocs.sumOf { it.shareAmount },
+                isPayer = isPayer,
+                isPaid = memberAllocs.isNotEmpty() && memberAllocs.all { it.isPaid },
+                showMarkPaid = canMarkOthersPaid && !isPayer,
+                onMarkPaid = { onMarkPaid(member.splitMemberId) }
             )
         }
     }
 }
 
 @Composable
-fun ContributionRow(name: String, share: Double, isPaid: Boolean?, isPayer: Boolean) {
+fun ContributionRow(
+    name: String,
+    share: Double,
+    isPayer: Boolean,
+    isPaid: Boolean,
+    showMarkPaid: Boolean,
+    onMarkPaid: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -289,13 +329,21 @@ fun ContributionRow(name: String, share: Double, isPaid: Boolean?, isPayer: Bool
         Text(
             text = formatCurrency(share),
             fontSize = 13.sp,
-            modifier = Modifier.width(70.dp),
+            modifier = Modifier.width(80.dp),
             textAlign = TextAlign.Center
         )
-        when {
-            isPayer -> StatusBadge(text = "Payer", modifier = Modifier.width(70.dp))
-            isPaid == true -> StatusBadge(text = "✓ Paid", isSettled = true, modifier = Modifier.width(70.dp))
-            else -> StatusBadge(text = "Pending", isPending = true, modifier = Modifier.width(70.dp))
+        Box(modifier = Modifier.width(90.dp), contentAlignment = Alignment.Center) {
+            when {
+                isPayer -> StatusBadge(text = "Payer")
+                isPaid -> StatusBadge(text = "✓ Paid", isSettled = true)
+                showMarkPaid -> TextButton(
+                    onClick = onMarkPaid,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("Mark paid", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+                else -> StatusBadge(text = "Pending", isPending = true)
+            }
         }
     }
 }
@@ -335,15 +383,18 @@ fun StatusBadge(
 }
 
 // ==========================================
-// 🧩 YOUR SETTLEMENT SECTION
+// 🧩 YOUR SETTLEMENT SECTION (settle buttons live here)
 // ==========================================
 @Composable
 fun YourSettlementSection(
-    currentAlloc: SplitAllocation?,
-    payerName: String,
+    isBillSettled: Boolean,
+    isMember: Boolean,
     isPayer: Boolean,
+    payerName: String,
+    myShare: Double,
     isSettled: Boolean,
-    onSettleAllocation: () -> Unit,
+    pendingOthers: Int,
+    onPay: () -> Unit,
     onSettleBill: () -> Unit
 ) {
     Card(
@@ -351,56 +402,80 @@ fun YourSettlementSection(
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Your Settlement", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("Settlement", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (isPayer) {
-                Text(
-                    text = "You are the payer for this bill.",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = onSettleBill,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MoneeGreen,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Mark Bill as Settled", fontWeight = FontWeight.SemiBold)
-                }
-            } else {
-                val amount = currentAlloc?.shareAmount ?: 0.0
-                TextRow(label = "Your share", value = formatCurrency(amount))
-                TextRow(
-                    label = "You owe $payerName",
-                    value = formatCurrency(amount),
-                    isBold = true
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = onSettleAllocation,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSettled) Color(0xFFE0E0E0) else MoneeYellow,
-                        contentColor = if (isSettled) Color.Gray else Color(0xFF424242)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !isSettled
-                ) {
+            when {
+                isBillSettled -> {
                     Text(
-                        text = if (isSettled) "✓ You've Paid" else "Pay ${formatCurrency(amount)}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
+                        text = "✓ This bill has been settled.",
+                        fontSize = 14.sp,
+                        color = MoneeGreen,
+                        fontWeight = FontWeight.Medium
                     )
+                }
+
+                !isMember -> {
+                    Text(
+                        text = "You are not part of this bill.",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                isPayer -> {
+                    Text(
+                        text = if (pendingOthers == 0) "Everyone has paid you back."
+                        else "$pendingOthers ${if (pendingOthers == 1) "person has" else "people have"} not paid you yet. " +
+                                "Use \"Mark paid\" above as each person pays you back.",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onSettleBill,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MoneeGreen,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Mark Bill as Settled", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                else -> {
+                    TextRow(label = "Your share", value = formatCurrency(myShare))
+                    TextRow(
+                        label = "You owe $payerName",
+                        value = if (isSettled) formatCurrency(0.0) else formatCurrency(myShare),
+                        isBold = true
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = onPay,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MoneeYellow,
+                            contentColor = Color(0xFF424242),
+                            disabledContainerColor = Color(0xFFE0E0E0),
+                            disabledContentColor = Color.Gray
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isSettled
+                    ) {
+                        Text(
+                            text = if (isSettled) "✓ You've Paid" else "Pay ${formatCurrency(myShare)}",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -423,4 +498,3 @@ fun TextRow(label: String, value: String, isBold: Boolean = false) {
         )
     }
 }
-
