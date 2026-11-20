@@ -2,6 +2,7 @@ package com.example.miniproject.repository
 
 
 import com.example.miniproject.data.Budget
+import com.example.miniproject.data.Expense
 import com.example.miniproject.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
@@ -71,4 +72,24 @@ class BudgetRepository {
             Result.success(Unit)
         } catch (e: Exception) { Result.failure(e) }
     }
+
+    suspend fun syncSpentForUser(userId: String, referenceDate: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val budget = getActiveBudget(userId, referenceDate).getOrNull()
+                    ?: return@withContext Result.success(Unit)
+                val expenses = supabase.from("expenses").select {
+                    filter {
+                        eq("user_id", userId)
+                        gte("date", budget.startDate)
+                        lte("date", budget.endDate)
+                    }
+                }.decodeList<Expense>()
+                val totalSpent = expenses.sumOf { it.amount }
+                if (budget.totalSpent != totalSpent) {
+                    updateTotalSpent(budget, totalSpent)
+                }
+                Result.success(Unit)
+            } catch (e: Exception) { Result.failure(e) }
+        }
 }

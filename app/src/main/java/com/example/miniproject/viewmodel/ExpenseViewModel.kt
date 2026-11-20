@@ -165,7 +165,7 @@ class ExpenseViewModel : ViewModel() {
                     }
             }
 
-            repository.deleteExpense(expenseId)
+            repository.deleteExpense(expenseId, expense?.userId ?: currentUserId)
                 .onSuccess {
                     onComplete(true, "Expense deleted successfully!", wasFromSplit)
                     _uiState.value = _uiState.value.copy(selectedExpense = null)

@@ -22,6 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.miniproject.data.Budget
 import com.example.miniproject.data.BudgetCategory
 import com.example.miniproject.repository.BudgetRepository
@@ -41,7 +44,11 @@ private val BudgetGreen = Color(0xFF17A673)
 private val BudgetRed = Color(0xFFF24B50)
 
 @Composable
-fun BudgetScreen(userId: String?, onBack: () -> Unit) {
+fun BudgetScreen(
+    userId: String?,
+    onBack: () -> Unit,
+    onManageExpenses: () -> Unit
+) {
     val budgetRepository = remember { BudgetRepository() }
     val expenseRepository = remember { ExpenseRepository() }
     val scope = rememberCoroutineScope()
@@ -54,8 +61,8 @@ fun BudgetScreen(userId: String?, onBack: () -> Unit) {
     var showBudgetDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(userId) {
-        if (userId == null) return@LaunchedEffect
+    suspend fun refreshBudgetData() {
+        if (userId == null) return
         val loaded =
             budgetRepository.getActiveBudget(userId, LocalDate.now().toString()).getOrNull()
         val expenses = expenseRepository.getExpenses(userId).getOrDefault(emptyList())
@@ -70,8 +77,20 @@ fun BudgetScreen(userId: String?, onBack: () -> Unit) {
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(userId) { refreshBudgetData() }
+    DisposableEffect(lifecycleOwner, userId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch { refreshBudgetData() }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val currentBudget = budget ?: Budget(
-        userId = userId.orEmpty(), budgetName = monthLabel, amountLimit = 2500.0,
+        userId = userId.orEmpty(), budgetName = monthLabel, amountLimit = 0.0,
         totalSpent = categorySpent.values.sum(), startDate = startDate, endDate = endDate
     )
     val spent = currentBudget.totalSpent
@@ -219,15 +238,13 @@ fun BudgetScreen(userId: String?, onBack: () -> Unit) {
                     fontSize = 10.sp
                 )
                 }
-                Text(
-                    "Manage",
-                    color = Color(0xFFAA7900),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(Color(0xFFFFF4D5), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 9.dp, vertical = 5.dp)
-                )
+                TextButton(
+                    onClick = onManageExpenses,
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+                    modifier = Modifier.background(Color(0xFFFFF4D5), RoundedCornerShape(12.dp))
+                ) {
+                    Text("Manage", color = Color(0xFFAA7900), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
             Spacer(Modifier.height(8.dp))
             categories.forEach { CategoryBudgetCard(it) }
@@ -468,7 +485,7 @@ private fun SetBudgetDialog(current: Double, onDismiss: () -> Unit, onSave: (Dou
         },
         confirmButton = {
             TextButton(onClick = {
-                value.toDoubleOrNull()?.takeIf { it > 0 }?.let(onSave)
+                value.toDoubleOrNull()?.takeIf { it >= 0 }?.let(onSave)
             }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

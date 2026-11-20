@@ -146,7 +146,8 @@ fun AppNavHost(
         composable(Screen.Budget.route) {
             BudgetScreen(
                 userId = supabaseClient.auth.currentUserOrNull()?.id,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onManageExpenses = { navController.navigate(Screen.Expense.route) }
             )
         }
 

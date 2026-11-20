@@ -13,6 +13,7 @@ import java.util.Objects.isNull
 
 class ExpenseRepository {
     private val supabase = SupabaseClient.instance
+    private val budgetRepository = BudgetRepository()
     private val expenseTable = "expenses"
     private val categoryTable = "categories"
 
@@ -45,6 +46,7 @@ class ExpenseRepository {
                 val result = supabase.from(expenseTable)
                     .insert(expense) { select() }
                     .decodeSingle<Expense>()
+                budgetRepository.syncSpentForUser(expense.userId, expense.date)
                 Result.success(result)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -123,6 +125,7 @@ class ExpenseRepository {
                         filter { eq("expense_id", expense.expenseId) }
                     }
                     .decodeSingle<Expense>()
+                budgetRepository.syncSpentForUser(expense.userId, expense.date)
                 Result.success(result)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -130,13 +133,14 @@ class ExpenseRepository {
         }
 
     // DELETE — Remove expense
-    suspend fun deleteExpense(expenseId: String): Result<Unit> =
+    suspend fun deleteExpense(expenseId: String, userId: String? = null): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 supabase.from(expenseTable)
                     .delete {
                         filter { eq("expense_id", expenseId) }
                     }
+                userId?.let { budgetRepository.syncSpentForUser(it, java.time.LocalDate.now().toString()) }
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)
