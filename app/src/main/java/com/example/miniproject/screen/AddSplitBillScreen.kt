@@ -33,6 +33,8 @@ import com.example.miniproject.data.SplitAllocation
 import com.example.miniproject.data.SplitBill
 import com.example.miniproject.data.SplitItem
 import com.example.miniproject.data.SplitMember
+import com.example.miniproject.receipt.ReceiptData
+import com.example.miniproject.receipt.ReceiptScanButton
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import com.example.miniproject.viewmodel.UserResult
@@ -88,6 +90,46 @@ fun AddSplitBillScreen(
     var expenseItems by remember { mutableStateOf(listOf<ExpenseItemState>()) }
     var sstPercent by remember { mutableStateOf("6") }
     var serviceChargePercent by remember { mutableStateOf("10") }
+    var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+
+    // Pre-fill the form from a scanned receipt. Nothing is saved: the user reviews and edits first.
+    fun applyReceipt(r: ReceiptData) {
+        scanError = null
+        r.merchant?.let { if (billTitle.isBlank()) billTitle = it }
+
+        fun newItem(name: String, unitPrice: Double, qty: Int) = ExpenseItemState(
+            item = SplitItem(
+                splitItemId = UUID.randomUUID().toString(),
+                splitBillId = "",
+                description = name,
+                amount = unitPrice,
+                quantity = qty,
+                payerId = null
+            ),
+            assignedMemberIds = emptyList(),   // who shared what is for the user to decide
+            splitMode = "equal",
+            percentages = emptyMap()
+        )
+
+        var scanned = r.items.map { newItem(it.name, it.unitPrice, it.quantity) }
+        // Nothing itemised but a total was read: one line, so there is still something to split
+        val receiptTotal = r.total
+        if (scanned.isEmpty() && receiptTotal != null) {
+            val base = r.subtotal ?: (receiptTotal - (r.sstAmount ?: 0.0) - (r.serviceChargeAmount ?: 0.0))
+            scanned = listOf(newItem("Receipt total", base, 1))
+        }
+
+        val untouched = expenseItems.all { it.item.description.isBlank() && it.item.amount == 0.0 }
+        expenseItems = if (untouched) scanned else expenseItems + scanned
+
+        // Use the receipt's own tax figures (0 when it has none) so the total matches the receipt
+        fun pctText(d: Double) = if (d % 1.0 == 0.0) d.toInt().toString() else d.toString()
+        sstPercent = pctText(r.sstPercent ?: 0.0)
+        serviceChargePercent = pctText(r.serviceChargePercent ?: 0.0)
+
+        scanNotes = r.warnings + "Assign each item to the people who shared it, then check the amounts."
+    }
 
     // Totals
     val subtotal = expenseItems.sumOf { it.item.amount * it.item.quantity }
@@ -203,6 +245,32 @@ fun AddSplitBillScreen(
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
+            }
+
+            item {
+                Column {
+                    ReceiptScanButton(
+                        onResult = { applyReceipt(it) },
+                        onError = { scanError = it }
+                    )
+                    scanError?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (scanNotes.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Please review", fontWeight = FontWeight.SemiBold)
+                                scanNotes.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                                TextButton(onClick = { scanNotes = emptyList() }) { Text("Dismiss") }
+                            }
+                        }
+                    }
+                }
             }
 
             item {

@@ -33,11 +33,6 @@ class ExpenseRepository {
             }
         }
 
-    // Picks the category used for expenses created from a split bill:
-    // a category whose name contains "split", else "other", else the first one.
-    // Returns (categoryId, categoryName), or null if none could be read.
-    // Reads raw JSON so it doesn't depend on the Category class's field names;
-    // it expects the columns "category_id" (or "id") and "name".
     private suspend fun getSplitCategory(): Pair<String, String>? =
         withContext(Dispatchers.IO) {
             try {
@@ -52,7 +47,7 @@ class ExpenseRepository {
                         if (id != null && name != null) id to name else null
                     }
 
-                all.firstOrNull { it.second.contains("split", ignoreCase = true) }
+                all.firstOrNull { it.second.trim().equals("bills", ignoreCase = true) }
                     ?: all.firstOrNull { it.second.contains("other", ignoreCase = true) }
                     ?: all.firstOrNull()
             } catch (e: Exception) {

@@ -27,12 +27,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Expense
+import com.example.miniproject.receipt.ReceiptData
+import com.example.miniproject.receipt.ReceiptScanButton
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val incomeCategories = listOf("Salary", "Invest", "Gift", "Customize +")
 
@@ -54,6 +57,8 @@ fun AddTransactionScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var repeatIncome by remember { mutableStateOf(false) }
+    var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
+    var scanError by remember { mutableStateOf<String?>(null) }
 
     // Load categories from ViewModel
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -62,6 +67,31 @@ fun AddTransactionScreen(
     // ✅ Load categories when screen opens
     LaunchedEffect(userId) {
         viewModel.loadCategories(userId)
+    }
+
+    // Pre-fill the form from a scanned receipt. Nothing is saved: the user reviews and edits first.
+    fun applyReceipt(r: ReceiptData) {
+        scanError = null
+
+        // The receipt's own total is what was actually paid; rebuild it only if it could not be read
+        val total = r.total
+            ?: r.items.takeIf { it.isNotEmpty() }?.let { found ->
+                (r.subtotal ?: found.sumOf { it.lineTotal }) +
+                        (r.sstAmount ?: 0.0) + (r.serviceChargeAmount ?: 0.0)
+            }
+        total?.let { amount = String.format(Locale.US, "%.2f", it) }
+
+        r.merchant?.let { if (description.isBlank()) description = it }
+
+        r.date?.let { iso ->
+            try {
+                displayDate = LocalDate.parse(iso).format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy"))
+            } catch (e: Exception) {
+                // keep the current date if the scanned one cannot be used
+            }
+        }
+
+        scanNotes = r.warnings + "Check the amount and date, then pick a category before saving."
     }
 
     val scheme = MaterialTheme.colorScheme
@@ -314,56 +344,31 @@ fun AddTransactionScreen(
 
             if (isExpense) {
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Receipt",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
+
+                // Real receipt scanning: fills in amount, description and date for review
+                ReceiptScanButton(
+                    onResult = { applyReceipt(it) },
+                    onError = { scanError = it }
                 )
-                Text(
-                    text = "Optional",
-                    fontSize = 11.sp,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = scheme.surface,
-                        border = BorderStroke(1.dp, Color(0xFFE8E8E8)),
-                        modifier = Modifier.weight(1f)
+
+                scanError?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(it, color = scheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+
+                if (scanNotes.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = scheme.secondaryContainer)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        ) {
-                            Text("📷", fontSize = 20.sp)
-                            Text("Take photo", fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                        }
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = scheme.surface,
-                        border = BorderStroke(1.dp, Color(0xFFE8E8E8)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        ) {
-                            Text("📁", fontSize = 20.sp)
-                            Text("Upload file", fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Please review", fontWeight = FontWeight.SemiBold)
+                            scanNotes.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                            TextButton(onClick = { scanNotes = emptyList() }) { Text("Dismiss") }
                         }
                     }
                 }
-                Text(
-                    text = "JPG, PNG or PDF · up to 10 MB",
-                    fontSize = 10.sp,
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
             }
 
             error?.let {
@@ -569,4 +574,3 @@ fun AddTransactionScreenPreview() {
         )
     }
 }
-
