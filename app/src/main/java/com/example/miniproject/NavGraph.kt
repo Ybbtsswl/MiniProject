@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 sealed class Screen(val route: String) {
+    object Startup : Screen("startup")
     object Onboarding : Screen("onboarding")
     object Auth : Screen("auth/{isRegister}") {
         fun createRoute(isRegister: Boolean) = "auth/$isRegister"
@@ -59,13 +60,33 @@ fun AppNavHost(
     navController: NavHostController,
     supabaseClient: SupabaseClient,
     modifier: Modifier = Modifier,
-    startDestination: String = Screen.Onboarding.route
+    startDestination: String = Screen.Startup.route
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier
     ) {
+        composable(Screen.Startup.route) {
+            // Supabase Auth persists the session on the device. Check it before
+            // showing onboarding so returning users go straight to the dashboard.
+            LaunchedEffect(Unit) {
+                val destination = if (supabaseClient.auth.currentSessionOrNull() != null) {
+                    Screen.Dashboard.route
+                } else {
+                    Screen.Onboarding.route
+                }
+
+                navController.navigate(destination) {
+                    popUpTo(Screen.Startup.route) { inclusive = true }
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+
         composable(Screen.Onboarding.route) {
             OnboardingRoute(
                 onFinished = {
