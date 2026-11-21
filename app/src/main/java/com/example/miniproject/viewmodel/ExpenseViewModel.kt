@@ -39,7 +39,7 @@ class ExpenseViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(totalExpense = total)
     }
 
-    // ✅ Load ALL expenses
+    // ✅ Load ALL expenses (every month) - used by the "All Expenses" screen
     fun loadExpenses(userId: String) {
         currentUserId = userId
         currentMonth = null
@@ -150,7 +150,6 @@ class ExpenseViewModel : ViewModel() {
         }
     }
 
-    // ✅ DELETE expense
     fun deleteExpense(expenseId: String, onComplete: (Boolean, String, Boolean) -> Unit) {
         viewModelScope.launch {
             val expense = _uiState.value.expenses.find { it.expenseId == expenseId }

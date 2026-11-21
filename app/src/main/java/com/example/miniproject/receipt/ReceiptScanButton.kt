@@ -21,6 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.miniproject.ui.theme.MoneeAmber
+import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeCardBorder
+import com.example.miniproject.ui.theme.MoneeGradientButton
+import com.example.miniproject.ui.theme.MoneeInk
+import com.example.miniproject.ui.theme.MoneeMuted
+import com.example.miniproject.ui.theme.moneeCardColors
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -34,10 +41,10 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 /**
- * "Scan" / "Upload" card. "Scan" opens ML Kit's document scanner, which finds the receipt edges,
- * flattens the perspective and cleans the image before OCR. Runs OCR on the result and hands the
- * parsed receipt to [onResult] so the caller can pre-fill its form. Nothing is saved here:
- * the user reviews and edits the form first.
+ * "Scan" / "Upload" card in the Monee style. "Scan" opens ML Kit's document scanner, which finds
+ * the receipt edges, flattens the perspective and cleans the image before OCR. Runs OCR on the
+ * result and hands the parsed receipt to [onResult] so the caller can pre-fill its form.
+ * Nothing is saved here: the user reviews and edits the form first.
  */
 @Composable
 fun ReceiptScanButton(
@@ -93,25 +100,40 @@ fun ReceiptScanButton(
         if (uri != null) scan(uri)
     }
 
-    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = moneeCardColors(),
+        border = MoneeCardBorder
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Scan receipt", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Scan receipt",
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                color = MoneeInk
+            )
             Text(
                 "Scan or upload a receipt to auto-fill the details. You can edit everything before saving.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MoneeMuted
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             if (scanning) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MoneeAmber
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Reading receipt...")
+                    Text("Reading receipt...", color = MoneeInk)
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    // Primary action: Monee yellow gradient
+                    MoneeGradientButton(
                         onClick = {
                             val activity = context.findActivity()
                             if (activity == null) {
@@ -127,21 +149,30 @@ fun ReceiptScanButton(
                                     }
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
                     ) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Scan")
+                        Text("Scan", fontWeight = FontWeight.SemiBold)
                     }
+
+                    // Secondary action: white with the Monee border
                     OutlinedButton(
                         onClick = {
                             gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(50.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MoneeBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MoneeInk)
                     ) {
                         Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Upload")
+                        Text("Upload", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

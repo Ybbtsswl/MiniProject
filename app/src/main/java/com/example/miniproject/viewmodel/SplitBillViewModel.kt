@@ -160,6 +160,29 @@ class SplitBillViewModel(
         }
     }
 
+    // Loads EVERY bill (all months) into `bills` for the "All Split Bills" screen.
+    // The month view's filteredBills and totals are left untouched, so going back to the
+    // Split bills screen still shows the month it was on.
+    fun loadAllBills(userId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+
+            repo.getSplitBillsForUser(userId)
+                .onSuccess { allBills ->
+                    _uiState.value = _uiState.value.copy(
+                        bills = allBills,
+                        isLoading = false
+                    )
+                }
+                .onFailure { err ->
+                    _uiState.value = _uiState.value.copy(
+                        error = err.message ?: "Failed to load bills",
+                        isLoading = false
+                    )
+                }
+        }
+    }
+
     suspend fun calculateSettlements(billId: String): Result<Map<String, Double>> {
         return try {
             val items = repo.getItems(billId).getOrThrow()

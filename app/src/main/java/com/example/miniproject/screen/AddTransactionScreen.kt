@@ -1,7 +1,7 @@
 package com.example.miniproject.screen
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +30,18 @@ import com.example.miniproject.data.Expense
 import com.example.miniproject.receipt.ReceiptData
 import com.example.miniproject.receipt.ReceiptScanButton
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.ui.theme.MoneeAmber
+import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeButtonBrush
+import com.example.miniproject.ui.theme.MoneeChip
+import com.example.miniproject.ui.theme.MoneeGradientButton
+import com.example.miniproject.ui.theme.MoneeInk
+import com.example.miniproject.ui.theme.MoneeMuted
+import com.example.miniproject.ui.theme.MoneeYellow
+import com.example.miniproject.ui.theme.MoneeYellowSoft
+import com.example.miniproject.ui.theme.moneeBackground
+import com.example.miniproject.ui.theme.moneeFieldColors
+import com.example.miniproject.ui.theme.moneeHero
 import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -96,9 +108,11 @@ fun AddTransactionScreen(
 
     val scheme = MaterialTheme.colorScheme
     val fieldShape = RoundedCornerShape(12.dp)
-    val cardBg = Color(0xFFFFF9E6)
 
-    Surface(Modifier.fillMaxSize(), color = scheme.background) {
+    Surface(
+        modifier = Modifier.fillMaxSize().moneeBackground(),
+        color = Color.Transparent
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -123,11 +137,13 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Income / Expense toggle
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(50.dp))
-                    .background(Color(0xFFF3F3F3))
+                    .background(scheme.surface)
+                    .border(1.dp, MoneeBorder, RoundedCornerShape(50.dp))
                     .padding(4.dp)
             ) {
                 Row {
@@ -137,7 +153,10 @@ fun AddTransactionScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(50.dp))
-                                .background(if (selected) scheme.primary else Color.Transparent)
+                                .then(
+                                    if (selected) Modifier.background(MoneeButtonBrush)
+                                    else Modifier.background(Color.Transparent)
+                                )
                                 .clickable {
                                     isExpense = label == "Expense"
                                     selectedCategoryId = null
@@ -148,7 +167,7 @@ fun AddTransactionScreen(
                             Text(
                                 text = label,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selected) scheme.onPrimary else Color(0xFF666666)
+                                color = if (selected) MoneeInk else MoneeMuted
                             )
                         }
                     }
@@ -157,11 +176,11 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Amount card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(cardBg)
+                    .moneeHero(RoundedCornerShape(20.dp))
                     .padding(vertical = 28.dp, horizontal = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -169,7 +188,7 @@ fun AddTransactionScreen(
                     Text(
                         text = if (isExpense) "ENTER EXPENSE AMOUNT" else "ENTER INCOME AMOUNT",
                         fontSize = 12.sp,
-                        color = scheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        color = MoneeMuted,
                         fontWeight = FontWeight.Medium
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -177,7 +196,7 @@ fun AddTransactionScreen(
                             text = "RM ",
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
-                            color = scheme.onBackground
+                            color = MoneeInk
                         )
                         TextField(
                             value = amount,
@@ -196,7 +215,11 @@ fun AddTransactionScreen(
                                 unfocusedContainerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
-                                cursorColor = scheme.primary
+                                cursorColor = MoneeAmber,
+                                focusedTextColor = MoneeInk,
+                                unfocusedTextColor = MoneeInk,
+                                focusedPlaceholderColor = MoneeMuted.copy(alpha = 0.5f),
+                                unfocusedPlaceholderColor = MoneeMuted.copy(alpha = 0.5f)
                             ),
                             modifier = Modifier.widthIn(min = 120.dp)
                         )
@@ -204,7 +227,7 @@ fun AddTransactionScreen(
                     Text(
                         text = "Malaysian Ringgit (MYR)",
                         fontSize = 11.sp,
-                        color = scheme.onSurfaceVariant,
+                        color = MoneeMuted,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -226,7 +249,7 @@ fun AddTransactionScreen(
                     Text(
                         text = "Selected: ${selectedCat?.name ?: ""}",
                         fontSize = 12.sp,
-                        color = scheme.primary,
+                        color = MoneeAmber,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -236,9 +259,9 @@ fun AddTransactionScreen(
 
             if (isExpense) {
                 if (isLoadingCategories) {
-                    Text(text = "Loading categories...", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = "Loading categories...", fontSize = 13.sp, color = MoneeMuted)
                 } else if (categories.isEmpty()) {
-                    Text(text = "No categories found", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = "No categories found", fontSize = 13.sp, color = MoneeMuted)
                 } else {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(categories) { cat ->
@@ -267,17 +290,10 @@ fun AddTransactionScreen(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Description", color = scheme.onSurfaceVariant) },
-                placeholder = { Text("What was this for?", color = scheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                label = { Text("Description") },
+                placeholder = { Text("What was this for?", color = MoneeMuted.copy(alpha = 0.5f)) },
                 shape = fieldShape,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = scheme.surface,
-                    unfocusedContainerColor = scheme.surface,
-                    focusedBorderColor = scheme.primary,
-                    unfocusedBorderColor = Color(0xFFE8E8E8),
-                    focusedLabelColor = scheme.onSurfaceVariant,
-                    cursorColor = scheme.onSurface
-                ),
+                colors = moneeFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -289,16 +305,10 @@ fun AddTransactionScreen(
                     onValueChange = {},
                     readOnly = true,
                     leadingIcon = {
-                        Icon(Icons.Default.DateRange, contentDescription = null, tint = scheme.onSurfaceVariant)
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = MoneeAmber)
                     },
                     shape = fieldShape,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = scheme.surface,
-                        unfocusedContainerColor = scheme.surface,
-                        focusedBorderColor = scheme.primary,
-                        unfocusedBorderColor = Color(0xFFE8E8E8),
-                        cursorColor = scheme.onSurface
-                    ),
+                    colors = moneeFieldColors(),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Box(
@@ -327,7 +337,7 @@ fun AddTransactionScreen(
                         Text(
                             text = "Automatically log this amount monthly",
                             style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
+                            color = MoneeMuted,
                             fontSize = 11.sp
                         )
                     }
@@ -335,8 +345,12 @@ fun AddTransactionScreen(
                         checked = repeatIncome,
                         onCheckedChange = { repeatIncome = it },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = scheme.primary,
-                            checkedTrackColor = scheme.primary.copy(alpha = 0.3f)
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MoneeYellow,
+                            checkedBorderColor = MoneeYellow,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = MoneeBorder,
+                            uncheckedBorderColor = MoneeBorder
                         )
                     )
                 }
@@ -360,12 +374,17 @@ fun AddTransactionScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = scheme.secondaryContainer)
+                        colors = CardDefaults.cardColors(containerColor = MoneeYellowSoft),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MoneeBorder)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Please review", fontWeight = FontWeight.SemiBold)
-                            scanNotes.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-                            TextButton(onClick = { scanNotes = emptyList() }) { Text("Dismiss") }
+                            Text("Please review", fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                            scanNotes.forEach {
+                                Text("• $it", style = MaterialTheme.typography.bodySmall, color = MoneeInk)
+                            }
+                            TextButton(onClick = { scanNotes = emptyList() }) {
+                                Text("Dismiss", color = MoneeAmber)
+                            }
                         }
                     }
                 }
@@ -381,7 +400,7 @@ fun AddTransactionScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            Button(
+            MoneeGradientButton(
                 onClick = {
                     val value = amount.toDoubleOrNull()
                     when {
@@ -424,14 +443,9 @@ fun AddTransactionScreen(
                         }
                     }
                 },
-                shape = RoundedCornerShape(50.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = scheme.primary,
-                    contentColor = scheme.onPrimary
-                )
+                    .height(56.dp)
             ) {
                 Text(
                     text = if (isExpense) "✓ Save Expense" else "✓ Save Income",
@@ -476,23 +490,23 @@ fun AddTransactionScreen(
                     }
                     showDatePicker = false
                 }) {
-                    Text("OK", fontWeight = FontWeight.SemiBold)
+                    Text("OK", fontWeight = FontWeight.SemiBold, color = MoneeAmber)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text("Cancel", color = MoneeMuted)
                 }
             }
         ) {
             DatePicker(
                 state = pickerState,
                 colors = DatePickerDefaults.colors(
-                    selectedDayContainerColor = scheme.primary,
-                    selectedDayContentColor = scheme.onPrimary,
-                    todayDateBorderColor = scheme.primary,
-                    titleContentColor = scheme.onBackground,
-                    headlineContentColor = scheme.onBackground
+                    selectedDayContainerColor = MoneeYellow,
+                    selectedDayContentColor = MoneeInk,
+                    todayDateBorderColor = MoneeYellow,
+                    titleContentColor = MoneeInk,
+                    headlineContentColor = MoneeInk
                 )
             )
         }
@@ -506,25 +520,18 @@ private fun CategoryChip(
     onClick: () -> Unit
 ) {
     val icon = category.icon ?: "•"
-    Surface(
+    MoneeChip(
+        selected = selected,
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        border = if (!selected) BorderStroke(1.dp, Color(0xFFE8E8E8)) else null
+        modifier = Modifier
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = icon, fontSize = 16.sp)
-            Text(
-                text = category.name,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 13.sp
-            )
-        }
+        Text(text = icon, fontSize = 16.sp)
+        Text(
+            text = category.name,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = 13.sp
+        )
     }
 }
 
@@ -541,25 +548,17 @@ private fun IncomeCategoryChip(
         "Customize +" -> "⚙️"
         else -> "•"
     }
-    Surface(
+    MoneeChip(
+        selected = selected,
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        border = if (!selected) BorderStroke(1.dp, Color(0xFFE8E8E8)) else null
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = icon, fontSize = 16.sp)
-            Text(
-                text = label,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 13.sp
-            )
-        }
+        Text(text = icon, fontSize = 16.sp)
+        Text(
+            text = label,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = 13.sp
+        )
     }
 }
 

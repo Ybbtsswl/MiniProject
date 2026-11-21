@@ -1,6 +1,6 @@
 package com.example.miniproject.screen
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,8 +30,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.miniproject.data.SplitBill
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeChip
+import com.example.miniproject.ui.theme.MoneeCream
+import com.example.miniproject.ui.theme.MoneeGradientButton
 import com.example.miniproject.ui.theme.MoneeGreen
+import com.example.miniproject.ui.theme.MoneeInk
+import com.example.miniproject.ui.theme.MoneeMuted
+import com.example.miniproject.ui.theme.MoneeRed
 import com.example.miniproject.ui.theme.MoneeYellow
+import com.example.miniproject.ui.theme.moneeBackground
+import com.example.miniproject.ui.theme.moneeCardColors
+import com.example.miniproject.ui.theme.moneeHero
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -38,8 +49,12 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.*
 
-private fun formatCurrency(amount: Double): String {
-    return NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ms_MY"))
+// internal: also used by AllSplitBillsScreen. Named differently from the expense screen's helper
+// because two top-level functions with the same name and signature in one package conflict.
+// The language tag needs a hyphen ("ms-MY"): with an underscore Java ignores it and prints a
+// generic currency sign instead of RM.
+internal fun formatBillAmount(amount: Double): String {
+    return NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ms-MY"))
         .apply { maximumFractionDigits = 2 }
         .format(amount)
         .replace("MYR", "RM")
@@ -61,7 +76,8 @@ fun SplitBillScreen(
     viewModel: SplitBillViewModel,
     onBillClick: (String) -> Unit,
     onCreateClick: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSeeAllClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -76,169 +92,192 @@ fun SplitBillScreen(
     }
 
     var selectedFilter by remember { mutableStateOf("ALL") }
+    var billToDelete by remember { mutableStateOf<SplitBill?>(null) }
 
     LaunchedEffect(userId, currentMonth) {
         viewModel.loadBills(userId, currentMonth)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Split bills",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+    Box(modifier = Modifier.fillMaxSize().moneeBackground()) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Split bills",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp
                         )
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp)
-            ) {
-                Button(
-                    onClick = onCreateClick,
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                        titleContentColor = MoneeInk,
+                        navigationIconContentColor = MoneeInk
+                    )
+                )
+            },
+            bottomBar = {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MoneeYellow,
-                        contentColor = Color(0xFF2D2D2D)
-                    ),
-                    shape = RoundedCornerShape(50.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 24.dp)
                 ) {
-                    Text(
-                        text = "Create split bill",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MoneeYellow)
-                }
-            } else if (uiState.error != null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(uiState.error!!, color = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                MonthNavigationCard(
-                    currentMonth = monthDisplay,
-                    onPrevMonth = { currentMonth = currentMonth.minusMonths(1) },
-                    onNextMonth = { currentMonth = currentMonth.plusMonths(1) },
-                    onMonthClick = { showMonthPicker = true },
-                    youOwe = uiState.youOwe,
-                    owedToYou = uiState.owedToYou
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                SettlementOverviewCard(
-                    openSplits = uiState.openSplits,
-                    settledAmount = uiState.settledAmount
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Split bill history",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    TextButton(onClick = { selectedFilter = "ALL" }) {
+                    MoneeGradientButton(
+                        onClick = onCreateClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                    ) {
                         Text(
-                            "See all",
-                            color = MoneeGreen,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "Create split bill",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                FilterTabsRow(
-                    selectedTab = selectedFilter,
-                    onTabSelected = { selectedFilter = it }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // ✅ APPLY FILTER HERE
-                val displayBills = remember(uiState.filteredBills, selectedFilter) {
-                    when (selectedFilter) {
-                        "SETTLED" -> uiState.filteredBills.filter {
-                            it.status.equals("SETTLED", ignoreCase = true)
-                        }
-                        "ACTIVE" -> uiState.filteredBills.filter {
-                            !it.status.equals("SETTLED", ignoreCase = true)
-                        }
-                        else -> uiState.filteredBills
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (uiState.isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = MoneeYellow)
                     }
-                }
-
-                if (displayBills.isEmpty()) {
-                    Box(
+                } else if (uiState.error != null) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = when (selectedFilter) {
-                                "SETTLED" -> "No settled bills yet"
-                                "ACTIVE" -> "No active split bills"
-                                else -> "No split bills yet"
-                            },
-                            fontSize = 14.sp,
-                            color = Color.Gray
+                            text = uiState.error!!,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                viewModel.clearError()
+                                viewModel.loadBills(userId, currentMonth)
+                            }
+                        ) {
+                            Text("Retry", color = MoneeGreen, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.heightIn(max = 500.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    MonthNavigationCard(
+                        currentMonth = monthDisplay,
+                        onPrevMonth = { currentMonth = currentMonth.minusMonths(1) },
+                        onNextMonth = { currentMonth = currentMonth.plusMonths(1) },
+                        onMonthClick = { showMonthPicker = true },
+                        youOwe = uiState.youOwe,
+                        owedToYou = uiState.owedToYou
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    SettlementOverviewCard(
+                        openSplits = uiState.openSplits,
+                        settledAmount = uiState.settledAmount
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(displayBills) { bill ->
-                            SplitBillItemRow(
-                                bill = bill,
-                                onClick = { onBillClick(bill.splitBillId) }
+                        Text(
+                            text = "Split bill history",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MoneeInk
+                        )
+                        TextButton(onClick = onSeeAllClick) {
+                            Text(
+                                "See all",
+                                color = MoneeGreen,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    FilterTabsRow(
+                        selectedTab = selectedFilter,
+                        onTabSelected = { selectedFilter = it }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val displayBills = remember(uiState.filteredBills, selectedFilter) {
+                        when (selectedFilter) {
+                            "SETTLED" -> uiState.filteredBills.filter {
+                                it.status.equals("SETTLED", ignoreCase = true)
+                            }
+                            "ACTIVE" -> uiState.filteredBills.filter {
+                                !it.status.equals("SETTLED", ignoreCase = true)
+                            }
+                            else -> uiState.filteredBills
+                        }
+                    }
+
+                    if (displayBills.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = when (selectedFilter) {
+                                    "SETTLED" -> "No settled bills yet"
+                                    "ACTIVE" -> "No active split bills"
+                                    else -> "No split bills yet"
+                                },
+                                fontSize = 14.sp,
+                                color = MoneeMuted
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.heightIn(max = 500.dp)
+                        ) {
+                            items(displayBills) { bill ->
+                                SplitBillItemRow(
+                                    bill = bill,
+                                    onClick = { onBillClick(bill.splitBillId) },
+                                    onDelete = { billToDelete = bill }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
             }
         }
     }
@@ -250,6 +289,30 @@ fun SplitBillScreen(
             onMonthSelected = { yearMonth ->
                 currentMonth = yearMonth.atDay(1)
                 showMonthPicker = false
+            }
+        )
+    }
+
+    billToDelete?.let { bill ->
+        AlertDialog(
+            onDismissRequest = { billToDelete = null },
+            containerColor = MoneeCream,
+            title = { Text("Delete split bill?", fontWeight = FontWeight.SemiBold) },
+            text = { Text("\"${bill.title}\" will be removed. This can't be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteBill(bill.splitBillId, userId, currentMonth)
+                        billToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MoneeRed, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { billToDelete = null }) {
+                    Text("Cancel", color = MoneeMuted)
+                }
             }
         )
     }
@@ -266,12 +329,10 @@ fun MonthNavigationCard(
 ) {
     val netBalance = owedToYou - youOwe
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MoneeYellow.copy(alpha = 0.15f)
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .moneeHero(RoundedCornerShape(20.dp))
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(
@@ -283,14 +344,14 @@ fun MonthNavigationCard(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowLeft,
                         contentDescription = "Previous",
-                        tint = Color.Gray,
+                        tint = MoneeMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
                 Text(
                     text = currentMonth,
                     fontSize = 14.sp,
-                    color = Color.Gray,
+                    color = MoneeInk,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable { onMonthClick() }
                 )
@@ -298,7 +359,7 @@ fun MonthNavigationCard(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowRight,
                         contentDescription = "Next",
-                        tint = Color.Gray,
+                        tint = MoneeMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -314,30 +375,30 @@ fun MonthNavigationCard(
                     Text(
                         text = "YOU OWE",
                         fontSize = 11.sp,
-                        color = Color.Gray,
+                        color = MoneeMuted,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = formatCurrency(youOwe),
+                        text = formatBillAmount(youOwe),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE5534B)
+                        color = MoneeRed
                     )
                     Text(
                         text = if (youOwe > 0) "Based on your open bills" else "All settled",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = MoneeMuted
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "OWED TO YOU",
                         fontSize = 11.sp,
-                        color = Color.Gray,
+                        color = MoneeMuted,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = formatCurrency(owedToYou),
+                        text = formatBillAmount(owedToYou),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MoneeGreen
@@ -345,23 +406,23 @@ fun MonthNavigationCard(
                     Text(
                         text = if (owedToYou > 0) "Based on your open bills" else "All settled",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = MoneeMuted
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(thickness = 1.dp, color = Color(0xFFE8E4D6))
+            HorizontalDivider(thickness = 1.dp, color = Color.White.copy(alpha = 0.7f))
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = if (netBalance >= 0) {
-                    "Net balance · ${formatCurrency(netBalance)} to receive"
+                    "Net balance · ${formatBillAmount(netBalance)} to receive"
                 } else {
-                    "Net balance · ${formatCurrency(-netBalance)} to pay"
+                    "Net balance · ${formatBillAmount(-netBalance)} to pay"
                 },
                 fontSize = 13.sp,
-                color = Color.Gray,
+                color = MoneeInk,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -387,6 +448,7 @@ fun MonthPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
+        containerColor = MoneeCream,
         confirmButton = {
             TextButton(
                 onClick = {
@@ -398,7 +460,7 @@ fun MonthPickerDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Cancel", color = Color.Gray)
+                Text("Cancel", color = MoneeMuted)
             }
         },
         title = {
@@ -414,54 +476,36 @@ fun MonthPickerDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Year", fontSize = 14.sp, color = Color.Gray)
+                Text("Year", fontSize = 14.sp, color = MoneeMuted)
                 Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.Center
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(years) { year ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (year == selectedYear) MoneeYellow else Color.Transparent,
-                            border = if (year != selectedYear) androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Color(0xFFE0DDD0)
-                            ) else null
+                        MoneeChip(
+                            selected = year == selectedYear,
+                            onClick = { selectedYear = year },
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
                                 text = year.toString(),
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    .clickable { selectedYear = year },
-                                fontWeight = if (year == selectedYear) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (year == selectedYear) Color(0xFF2D2D2D) else Color.Gray
+                                fontWeight = if (year == selectedYear) FontWeight.SemiBold else FontWeight.Normal
                             )
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Month", fontSize = 14.sp, color = Color.Gray)
+                Text("Month", fontSize = 14.sp, color = MoneeMuted)
                 Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(months) { monthName ->
                         val monthNumber = months.indexOf(monthName) + 1
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (monthNumber == selectedMonth) MoneeYellow else Color.Transparent,
-                            border = if (monthNumber != selectedMonth) androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Color(0xFFE0DDD0)
-                            ) else null
+                        MoneeChip(
+                            selected = monthNumber == selectedMonth,
+                            onClick = { selectedMonth = monthNumber },
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
                                 text = monthName,
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    .clickable { selectedMonth = monthNumber },
-                                fontWeight = if (monthNumber == selectedMonth) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (monthNumber == selectedMonth) Color(0xFF2D2D2D) else Color.Gray
+                                fontWeight = if (monthNumber == selectedMonth) FontWeight.SemiBold else FontWeight.Normal
                             )
                         }
                     }
@@ -476,9 +520,8 @@ fun SettlementOverviewCard(openSplits: Int, settledAmount: Double) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF8F6ED)
-        )
+        colors = moneeCardColors(),
+        border = BorderStroke(1.dp, MoneeBorder)
     ) {
         Row(
             modifier = Modifier
@@ -491,25 +534,27 @@ fun SettlementOverviewCard(openSplits: Int, settledAmount: Double) {
                 Text(
                     text = "Settlement overview",
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MoneeInk
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "$openSplits open splits",
                     fontSize = 13.sp,
-                    color = Color.Gray
+                    color = MoneeMuted
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = formatCurrency(settledAmount),
+                    text = formatBillAmount(settledAmount),
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MoneeInk
                 )
                 Text(
                     text = "settled this month",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MoneeMuted
                 )
             }
         }
@@ -533,44 +578,34 @@ fun FilterTabsRow(
     ) {
         tabs.forEach { (key, label) ->
             val isSelected = selectedTab == key
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) MoneeYellow else Color.Transparent,
-                border = if (!isSelected) androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Color(0xFFE0DDD0)
-                ) else null
-            ) {
+            MoneeChip(selected = isSelected, onClick = { onTabSelected(key) }) {
                 Text(
                     text = label,
                     fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color(0xFF2D2D2D) else Color.Gray,
-                    modifier = Modifier
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                        .clickable { onTabSelected(key) }
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }
     }
 }
 
+// onDelete = null hides the delete button (used by the read-only "all bills" list)
 @Composable
-fun SplitBillItemRow(bill: SplitBill, onClick: () -> Unit) {
+fun SplitBillItemRow(bill: SplitBill, onClick: () -> Unit, onDelete: (() -> Unit)? = null) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        )
+        colors = moneeCardColors(),
+        border = BorderStroke(1.dp, MoneeBorder)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 16.dp),
+                .padding(vertical = 10.dp)
+                .padding(start = 16.dp, end = if (onDelete != null) 6.dp else 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -578,19 +613,21 @@ fun SplitBillItemRow(bill: SplitBill, onClick: () -> Unit) {
                 Text(
                     text = bill.title,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = MoneeInk
                 )
                 Text(
                     text = "${formatDateShort(bill.billDate)} · ${bill.participantCount} people",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = MoneeMuted
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = formatCurrency(bill.totalAmount),
+                    text = formatBillAmount(bill.totalAmount),
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MoneeInk
                 )
                 val statusText = when (bill.status.lowercase()) {
                     "settled" -> "Settled"
@@ -598,7 +635,7 @@ fun SplitBillItemRow(bill: SplitBill, onClick: () -> Unit) {
                 }
                 val statusColor = when (bill.status.lowercase()) {
                     "settled" -> MoneeGreen
-                    else -> Color.Gray
+                    else -> MoneeMuted
                 }
                 Text(
                     text = statusText,
@@ -606,11 +643,21 @@ fun SplitBillItemRow(bill: SplitBill, onClick: () -> Unit) {
                     color = statusColor
                 )
             }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Delete",
+                        tint = MoneeRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFFFFBF2)
+@Preview(showBackground = true)
 @Composable
 fun SplitBillScreenPreview() {
     MiniProjectTheme {
@@ -660,8 +707,8 @@ fun SplitBillScreenPreview() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .moneeBackground()
                 .padding(20.dp)
-                .background(Color(0xFFFFFBF2))
                 .verticalScroll(rememberScrollState())
         ) {
             MonthNavigationCard(
@@ -696,7 +743,7 @@ fun SplitBillScreenPreview() {
                 else -> mockBills
             }
             displayBills.forEach { bill ->
-                SplitBillItemRow(bill = bill, onClick = {})
+                SplitBillItemRow(bill = bill, onClick = {}, onDelete = {})
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }

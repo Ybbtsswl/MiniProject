@@ -37,12 +37,16 @@ sealed class Screen(val route: String) {
     }
     object Dashboard : Screen("dashboard")
     object Expense : Screen("expense")
+    object AllExpenses : Screen("all_expenses")
     object Budget : Screen("budget")
     object AddTransaction : Screen("add_transaction/{userId}") {
         fun createRoute(userId: String) = "add_transaction/$userId"
     }
     object SplitBill : Screen("split_bill/{userId}") {
         fun createRoute(userId: String) = "split_bill/$userId"
+    }
+    object AllSplitBills : Screen("all_split_bills/{userId}") {
+        fun createRoute(userId: String) = "all_split_bills/$userId"
     }
     object AddSplitBill : Screen("add_split_bill/{userId}") {
         fun createRoute(userId: String) = "add_split_bill/$userId"
@@ -162,7 +166,17 @@ fun AppNavHost(
                 userId = userId,
                 onAddClick = {
                     userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
+                },
+                onSeeAllClick = {
+                    navController.navigate(Screen.AllExpenses.route)
                 }
+            )
+        }
+
+        composable(Screen.AllExpenses.route) {
+            AllExpensesScreen(
+                userId = supabaseClient.auth.currentUserOrNull()?.id,
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -225,6 +239,27 @@ fun AppNavHost(
                 },
                 onCreateClick = {
                     navController.navigate(Screen.AddSplitBill.createRoute(userId))
+                },
+                onBack = { navController.popBackStack() },
+                onSeeAllClick = {
+                    navController.navigate(Screen.AllSplitBills.createRoute(userId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.AllSplitBills.route,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId")!!
+
+            AllSplitBillsScreen(
+                userId = userId,
+                viewModel = splitBillViewModel,
+                onBillClick = { billId ->
+                    navController.navigate(Screen.SplitBillDetail.createRoute(billId))
                 },
                 onBack = { navController.popBackStack() }
             )

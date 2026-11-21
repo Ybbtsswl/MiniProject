@@ -1,5 +1,6 @@
 package com.example.miniproject.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,27 +34,32 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Category
 import com.example.miniproject.data.Expense
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.ui.theme.MoneeAmber
+import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeButtonBrush
+import com.example.miniproject.ui.theme.MoneeChip
+import com.example.miniproject.ui.theme.MoneeCream
+import com.example.miniproject.ui.theme.MoneeGradientButton
 import com.example.miniproject.ui.theme.MoneeGreen
+import com.example.miniproject.ui.theme.MoneeInk
+import com.example.miniproject.ui.theme.MoneeMuted
 import com.example.miniproject.ui.theme.MoneeRed
+import com.example.miniproject.ui.theme.MoneeYellow
+import com.example.miniproject.ui.theme.MoneeYellowSoft
+import com.example.miniproject.ui.theme.moneeBackground
+import com.example.miniproject.ui.theme.moneeCardColors
+import com.example.miniproject.ui.theme.moneeFieldColors
+import com.example.miniproject.ui.theme.moneeHero
 import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val ScreenBackground = Color(0xFFFFFFFF)
-private val CardSoft = Color(0xFFFFF9E6)
-private val TextPrimary = Color(0xFF2D2D2D)
-private val TextSecondary = Color(0xFF888888)
-private val BorderSoft = Color(0xFFF5F5F5)
-private val DialogCardBg = Color(0xFFFFF9E6)
-private val InputBg = Color(0xFFF8F8F8)
-private val ChipSelected = Color(0xFFFFE866)
-private val ChipUnselected = Color(0xFFF5F5F5)
-
 @Composable
 fun ExpenseScreen(
     onAddClick: () -> Unit,
+    onSeeAllClick: () -> Unit = {},
     userId: String? = null,
     viewModel: ExpenseViewModel = viewModel()
 ) {
@@ -85,251 +92,259 @@ fun ExpenseScreen(
     val monthlyTotal = expenses.sumOf { it.amount }
     val monthChange = -12.4
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = ScreenBackground
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .moneeBackground()
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "←",
+                    fontSize = 20.sp,
+                    color = MoneeInk,
+                    modifier = Modifier.clickable { }
+                )
+                Text(
+                    text = "Expenses",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MoneeInk
+                )
+                Spacer(modifier = Modifier.width(24.dp))
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "‹",
+                    fontSize = 20.sp,
+                    color = MoneeMuted,
+                    modifier = Modifier.clickable {
+                        val prev = LocalDate.parse("$selectedMonth-01").minusMonths(1)
+                        selectedMonth = prev.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+                    }
+                )
+                Text(
+                    text = displayMonth,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MoneeInk
+                )
+                Text(
+                    text = "›",
+                    fontSize = 20.sp,
+                    color = MoneeMuted,
+                    modifier = Modifier.clickable {
+                        val next = LocalDate.parse("$selectedMonth-01").plusMonths(1)
+                        selectedMonth = next.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .moneeHero(RoundedCornerShape(20.dp))
+                    .padding(vertical = 24.dp, horizontal = 20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "←",
-                        fontSize = 20.sp,
-                        color = TextPrimary,
-                        modifier = Modifier.clickable { }
+                        text = "TOTAL EXPENSES THIS MONTH",
+                        fontSize = 12.sp,
+                        color = MoneeMuted,
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Expenses",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
+                        text = formatExpenseAmount(monthlyTotal),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MoneeInk,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
-                    Spacer(modifier = Modifier.width(24.dp))
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "‹",
-                        fontSize = 20.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.clickable {
-                            val prev = LocalDate.parse("$selectedMonth-01").minusMonths(1)
-                            selectedMonth = prev.format(DateTimeFormatter.ofPattern("yyyy-MM"))
-                        }
-                    )
-                    Text(
-                        text = displayMonth,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "›",
-                        fontSize = 20.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.clickable {
-                            val next = LocalDate.parse("$selectedMonth-01").plusMonths(1)
-                            selectedMonth = next.format(DateTimeFormatter.ofPattern("yyyy-MM"))
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(CardSoft)
-                        .padding(vertical = 24.dp, horizontal = 20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text(text = "↓ ", fontSize = 12.sp, color = MoneeGreen)
                         Text(
-                            text = "TOTAL EXPENSES THIS MONTH",
+                            text = "${monthChange * -1}% less than last month",
                             fontSize = 12.sp,
-                            color = Color(0xFF9A8B48),
-                            fontWeight = FontWeight.Medium
+                            color = MoneeGreen
                         )
-                        Text(
-                            text = formatCurrency(monthlyTotal),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text(text = "↓ ", fontSize = 12.sp, color = MoneeGreen)
-                            Text(
-                                text = "${monthChange * -1}% less than last month",
-                                fontSize = 12.sp,
-                                color = MoneeGreen
-                            )
-                        }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                when {
-                    uiState.isLoading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 60.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = Color(0xFFFFD447))
-                        }
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MoneeYellow)
                     }
-                    uiState.error != null -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 60.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = uiState.error ?: "Error loading data",
-                                color = MoneeRed,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                    expenses.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 60.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No expenses yet.\nTap + to add your first expense!",
-                                color = TextSecondary,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                    else -> {
+                }
+                uiState.error != null -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = "Summary by category",
-                            fontSize = 15.sp,
+                            text = uiState.error ?: "Error loading data",
+                            color = MoneeRed,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                expenses.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No expenses yet.\nTap + to add your first expense!",
+                            color = MoneeMuted,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                else -> {
+                    Text(
+                        text = "Summary by category",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MoneeInk
+                    )
+                    Text(
+                        text = "Tap an item to view details",
+                        fontSize = 11.sp,
+                        color = MoneeMuted,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val categoryTotals = expenses
+                        .groupBy { it.category }
+                        .mapValues { it.value.sumOf { exp -> exp.amount } }
+                        .toList()
+                        .sortedByDescending { (_, amount) -> amount }
+
+                    categoryTotals.take(3).forEach { (cat, amt) ->
+                        CategoryBar(cat, amt, monthlyTotal)
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Expense History",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
+                            color = MoneeInk
                         )
                         Text(
-                            text = "Tap an item to view details",
-                            fontSize = 11.sp,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(top = 2.dp)
+                            text = "See all",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MoneeAmber,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onSeeAllClick)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
+                    }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                        val categoryTotals = expenses
-                            .groupBy { it.category }
-                            .mapValues { it.value.sumOf { exp -> exp.amount } }
-                            .toList()
-                            .sortedByDescending { (_, amount) -> amount }
-
-                        categoryTotals.take(3).forEach { (cat, amt) ->
-                            CategoryBar(cat, amt, monthlyTotal)
-                        }
-
-                        Spacer(modifier = Modifier.height(28.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Expense History",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary
+                    val tabNames = listOf("All") + categories.map { it.name }
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(tabNames) { tab ->
+                            TabItem(
+                                label = tab,
+                                selected = selectedTab == tab,
+                                onClick = { selectedTab = tab }
                             )
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                        val tabNames = listOf("All") + categories.map { it.name }
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            items(tabNames) { tab ->
-                                TabItem(
-                                    label = tab,
-                                    selected = selectedTab == tab,
-                                    onClick = { selectedTab = tab }
-                                )
-                            }
+                    val filteredExpenses = when (selectedTab) {
+                        "All" -> expenses
+                        else -> expenses.filter {
+                            it.category.equals(selectedTab, ignoreCase = true)
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        val filteredExpenses = when (selectedTab) {
-                            "All" -> expenses
-                            else -> expenses.filter {
-                                it.category.equals(selectedTab, ignoreCase = true)
-                            }
-                        }
-
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            contentPadding = PaddingValues(bottom = 100.dp)
-                        ) {
-                            if (filteredExpenses.isEmpty()) {
-                                item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 30.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "No transactions in this category",
-                                            color = TextSecondary,
-                                            fontSize = 13.sp
-                                        )
-                                    }
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 110.dp)
+                    ) {
+                        if (filteredExpenses.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 30.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No transactions in this category",
+                                        color = MoneeMuted,
+                                        fontSize = 13.sp
+                                    )
                                 }
-                            } else {
-                                val grouped = filteredExpenses.groupBy { getDisplayDate(it.date) }
-                                grouped.forEach { (date, itemsList) ->
-                                    item {
-                                        Text(
-                                            text = date,
-                                            fontSize = 12.sp,
-                                            color = TextSecondary,
-                                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                        )
-                                    }
-                                    items(itemsList) { exp ->
-                                        ExpenseItemRow(
-                                            exp = exp,
-                                            onItemClick = { selectedExpense = exp }
-                                        )
-                                    }
+                            }
+                        } else {
+                            val grouped = filteredExpenses.groupBy { expenseDisplayDate(it.date) }
+                            grouped.forEach { (date, itemsList) ->
+                                item {
+                                    Text(
+                                        text = date,
+                                        fontSize = 12.sp,
+                                        color = MoneeMuted,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 0.dp)
+                                    )
+                                }
+                                items(itemsList) { exp ->
+                                    ExpenseItemRow(
+                                        exp = exp,
+                                        onItemClick = { selectedExpense = exp }
+                                    )
                                 }
                             }
                         }
@@ -338,24 +353,22 @@ fun ExpenseScreen(
             }
         }
 
+        // Add button with a soft white fade so list items don't run into it
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 24.dp),
-            contentAlignment = Alignment.BottomCenter
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.White))
+                )
+                .padding(top = 24.dp, bottom = 24.dp)
         ) {
-            Button(
+            MoneeGradientButton(
                 onClick = onAddClick,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
                     .height(56.dp)
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFFE866),
-                    contentColor = TextPrimary
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 Text(
                     text = "+ Add Expense",
@@ -416,13 +429,13 @@ private fun CategoryBar(label: String, amount: Double, total: Double) {
             Text(
                 text = label,
                 fontSize = 13.sp,
-                color = TextPrimary
+                color = MoneeInk
             )
             Text(
-                text = formatCurrency(amount),
+                text = formatExpenseAmount(amount),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = TextPrimary
+                color = MoneeInk
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -431,14 +444,14 @@ private fun CategoryBar(label: String, amount: Double, total: Double) {
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(BorderSoft)
+                .background(Color.White.copy(alpha = 0.8f))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(percentage / 100f)
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(Color(0xFFFFD447).copy(alpha = 0.85f))
+                    .background(MoneeButtonBrush)
             )
         }
     }
@@ -450,23 +463,20 @@ private fun TabItem(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    Text(
-        text = label,
-        fontSize = 13.sp,
-        color = if (selected) TextPrimary else TextSecondary,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (selected) CardSoft else Color.Transparent)
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-    )
+    MoneeChip(selected = selected, onClick = onClick) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
 }
 
+// internal: also used by AllExpensesScreen. Pass onItemClick = null for a non-clickable row.
 @Composable
-private fun ExpenseItemRow(
+internal fun ExpenseItemRow(
     exp: Expense,
-    onItemClick: () -> Unit
+    onItemClick: (() -> Unit)? = null
 ) {
     val displayText = exp.description.ifEmpty {
         exp.category
@@ -475,49 +485,57 @@ private fun ExpenseItemRow(
     val textSize = if (exp.description.isEmpty()) 15.sp else 14.sp
     val textWeight = if (exp.description.isEmpty()) FontWeight.SemiBold else FontWeight.Medium
 
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onItemClick() }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (onItemClick != null) Modifier.clickable { onItemClick() } else Modifier),
+        shape = RoundedCornerShape(14.dp),
+        colors = moneeCardColors(),
+        border = BorderStroke(1.dp, MoneeBorder)
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(CardSoft),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = categoryEmoji(exp.category), fontSize = 18.sp)
-        }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MoneeYellowSoft),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = expenseCategoryEmoji(exp.category), fontSize = 18.sp)
+            }
 
-        Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = displayText,
-                fontSize = textSize,
-                fontWeight = textWeight,
-                color = TextPrimary
-            )
-            Text(
-                text = "${exp.category} · ${exp.date}",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = if (exp.description.isEmpty()) Modifier.padding(top = 2.dp) else Modifier
-            )
-        }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = displayText,
+                    fontSize = textSize,
+                    fontWeight = textWeight,
+                    color = MoneeInk
+                )
+                Text(
+                    text = "${exp.category} · ${exp.date}",
+                    fontSize = 11.sp,
+                    color = MoneeMuted,
+                    modifier = if (exp.description.isEmpty()) Modifier.padding(top = 2.dp) else Modifier
+                )
+            }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "- ${formatCurrency(exp.amount)}",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MoneeRed
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "- ${formatExpenseAmount(exp.amount)}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MoneeRed
+                )
+            }
         }
     }
 }
@@ -539,7 +557,7 @@ fun ExpenseDetailDialog(
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.background,
+            color = MoneeCream,
             shadowElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
@@ -559,13 +577,14 @@ fun ExpenseDetailDialog(
                     Text(
                         text = "Expense Details",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = MoneeInk
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MoneeMuted
                         )
                     }
                 }
@@ -573,14 +592,13 @@ fun ExpenseDetailDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(DialogCardBg)
+                        .moneeHero(RoundedCornerShape(16.dp))
                         .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = formatCurrency(expense.amount),
+                            text = formatExpenseAmount(expense.amount),
                             fontSize = 30.sp,
                             fontWeight = FontWeight.Bold,
                             color = MoneeRed
@@ -588,7 +606,7 @@ fun ExpenseDetailDialog(
                         Text(
                             text = expense.category,
                             fontSize = 15.sp,
-                            color = TextSecondary,
+                            color = MoneeMuted,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
@@ -609,13 +627,10 @@ fun ExpenseDetailDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Button(
+                    MoneeGradientButton(
                         onClick = onEdit,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(48.dp)
                     ) {
                         Icon(Icons.Default.Edit, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -624,10 +639,12 @@ fun ExpenseDetailDialog(
                     Button(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MoneeRed.copy(alpha = 0.15f),
+                            containerColor = MoneeRed.copy(alpha = 0.12f),
                             contentColor = MoneeRed
-                        )
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
                     ) {
                         Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -648,13 +665,13 @@ private fun DetailRow(label: String, value: String) {
         Text(
             text = label,
             fontSize = 14.sp,
-            color = TextSecondary
+            color = MoneeMuted
         )
         Text(
             text = value,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = TextPrimary
+            color = MoneeInk
         )
     }
 }
@@ -670,8 +687,6 @@ fun EditExpenseDialog(
     var description by remember { mutableStateOf(expense.description ?: "") }
     var selectedCategoryId by remember { mutableStateOf(expense.categoryId) }
     var selectedDate by remember { mutableStateOf(expense.date) }
-
-    val selectedCategory = categories.find { it.categoryId == selectedCategoryId }
 
     val isFormValid by remember {
         derivedStateOf {
@@ -692,7 +707,7 @@ fun EditExpenseDialog(
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = ScreenBackground,
+            color = MoneeCream,
             shadowElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
@@ -712,13 +727,14 @@ fun EditExpenseDialog(
                     Text(
                         text = "Edit Expense",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = MoneeInk
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MoneeMuted
                         )
                     }
                 }
@@ -728,7 +744,7 @@ fun EditExpenseDialog(
                         text = "Amount",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MoneeMuted
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -742,12 +758,7 @@ fun EditExpenseDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = InputBg,
-                            unfocusedContainerColor = InputBg,
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent
-                        )
+                        colors = moneeFieldColors()
                     )
                 }
 
@@ -756,7 +767,7 @@ fun EditExpenseDialog(
                         text = "Category",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MoneeMuted
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyRow(
@@ -764,17 +775,12 @@ fun EditExpenseDialog(
                     ) {
                         items(categories) { cat ->
                             val isSelected = selectedCategoryId == cat.categoryId
-                            FilterChip(
+                            MoneeChip(
                                 selected = isSelected,
-                                onClick = { selectedCategoryId = cat.categoryId },
-                                label = { Text("${cat.icon ?: "💰"} ${cat.name}") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ChipSelected,
-                                    selectedLabelColor = Color(0xFF2D2D2D),
-                                    containerColor = ChipUnselected
-                                ),
-                                border = null
-                            )
+                                onClick = { selectedCategoryId = cat.categoryId }
+                            ) {
+                                Text("${cat.icon ?: "💰"} ${cat.name}", fontSize = 14.sp)
+                            }
                         }
                     }
                 }
@@ -784,7 +790,7 @@ fun EditExpenseDialog(
                         text = "Date",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MoneeMuted
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -792,17 +798,12 @@ fun EditExpenseDialog(
                         onValueChange = { selectedDate = it },
                         readOnly = true,
                         trailingIcon = {
-                            Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+                            Icon(Icons.Default.DateRange, contentDescription = "Select Date", tint = MoneeMuted)
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = InputBg,
-                            unfocusedContainerColor = InputBg,
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent
-                        )
+                        colors = moneeFieldColors()
                     )
                 }
 
@@ -811,7 +812,7 @@ fun EditExpenseDialog(
                         text = "Description (Optional)",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MoneeMuted
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -821,12 +822,7 @@ fun EditExpenseDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = InputBg,
-                            unfocusedContainerColor = InputBg,
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent
-                        )
+                        colors = moneeFieldColors()
                     )
                 }
 
@@ -839,15 +835,16 @@ fun EditExpenseDialog(
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f).height(50.dp),
+                        shape = RoundedCornerShape(50.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ChipUnselected,
-                            contentColor = Color(0xFF2D2D2D)
+                            containerColor = MoneeYellowSoft,
+                            contentColor = MoneeInk
                         ),
                         elevation = ButtonDefaults.buttonElevation(0.dp)
                     ) {
                         Text("Cancel", fontWeight = FontWeight.Medium)
                     }
-                    Button(
+                    MoneeGradientButton(
                         onClick = {
                             val updatedAmount = amount.toDoubleOrNull() ?: 0.0
                             val selectedCat = categories.find { it.categoryId == selectedCategoryId }
@@ -861,14 +858,7 @@ fun EditExpenseDialog(
                             onSave(updatedExpense)
                         },
                         enabled = isFormValid,
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFFE866),
-                            contentColor = Color(0xFF2D2D2D),
-                            disabledContainerColor = ChipUnselected,
-                            disabledContentColor = Color.Gray
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                        modifier = Modifier.weight(1f).height(50.dp)
                     ) {
                         Text("Save", fontWeight = FontWeight.SemiBold)
                     }
@@ -878,7 +868,7 @@ fun EditExpenseDialog(
     }
 }
 
-private fun categoryEmoji(categoryName: String?): String {
+internal fun expenseCategoryEmoji(categoryName: String?): String {
     if (categoryName == null) return "💰"
     return when (categoryName.lowercase()) {
         "food", "food & drinks" -> "🍜"
@@ -891,7 +881,7 @@ private fun categoryEmoji(categoryName: String?): String {
     }
 }
 
-private fun formatCurrency(amount: Double): String {
+internal fun formatExpenseAmount(amount: Double): String {
     val fmt = NumberFormat.getInstance(Locale.US).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2
@@ -899,7 +889,7 @@ private fun formatCurrency(amount: Double): String {
     return "RM ${fmt.format(amount)}"
 }
 
-private fun getDisplayDate(dateStr: String): String {
+internal fun expenseDisplayDate(dateStr: String): String {
     return try {
         val date = LocalDate.parse(dateStr)
         val today = LocalDate.now()
@@ -932,7 +922,7 @@ fun EditExpenseDialogPreview() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF5F5F5)),
+                .moneeBackground(),
             contentAlignment = Alignment.Center
         ) {
             EditExpenseDialog(

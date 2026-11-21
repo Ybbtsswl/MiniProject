@@ -1,6 +1,7 @@
 package com.example.miniproject.screen
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +37,19 @@ import com.example.miniproject.data.SplitMember
 import com.example.miniproject.receipt.ReceiptData
 import com.example.miniproject.receipt.ReceiptScanButton
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.ui.theme.MoneeAmber
+import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeChip
+import com.example.miniproject.ui.theme.MoneeCream
+import com.example.miniproject.ui.theme.MoneeGradientButton
+import com.example.miniproject.ui.theme.MoneeInk
+import com.example.miniproject.ui.theme.MoneeMuted
+import com.example.miniproject.ui.theme.MoneeYellow
+import com.example.miniproject.ui.theme.MoneeYellowSoft
+import com.example.miniproject.ui.theme.moneeBackground
+import com.example.miniproject.ui.theme.moneeCardColors
+import com.example.miniproject.ui.theme.moneeFieldColors
+import com.example.miniproject.ui.theme.moneeHero
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import com.example.miniproject.viewmodel.UserResult
 import java.time.LocalDate
@@ -217,204 +231,227 @@ fun AddSplitBillScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Create Split Bill") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            item {
-                OutlinedTextField(
-                    value = billTitle,
-                    onValueChange = { billTitle = it },
-                    label = { Text("Bill Title") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+    Box(modifier = Modifier.fillMaxSize().moneeBackground()) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Create Split Bill") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                        titleContentColor = MoneeInk,
+                        navigationIconContentColor = MoneeInk
+                    )
                 )
             }
-
-            item {
-                Column {
-                    ReceiptScanButton(
-                        onResult = { applyReceipt(it) },
-                        onError = { scanError = it }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = billTitle,
+                        onValueChange = { billTitle = it },
+                        label = { Text("Bill Title") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        colors = moneeFieldColors()
                     )
-                    scanError?.let {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (scanNotes.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("Please review", fontWeight = FontWeight.SemiBold)
-                                scanNotes.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-                                TextButton(onClick = { scanNotes = emptyList() }) { Text("Dismiss") }
+                }
+
+                item {
+                    Column {
+                        ReceiptScanButton(
+                            onResult = { applyReceipt(it) },
+                            onError = { scanError = it }
+                        )
+                        scanError?.let {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (scanNotes.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MoneeYellowSoft),
+                                border = BorderStroke(1.dp, MoneeBorder)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("Please review", fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                                    scanNotes.forEach {
+                                        Text("• $it", style = MaterialTheme.typography.bodySmall, color = MoneeInk)
+                                    }
+                                    TextButton(onClick = { scanNotes = emptyList() }) {
+                                        Text("Dismiss", color = MoneeAmber)
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            item {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        TextButton(onClick = { showManageDialog = true }) {
-                            Text("Manage", color = MaterialTheme.colorScheme.primary)
+                item {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { showManageDialog = true }) {
+                                Text("Manage", color = MoneeAmber, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        if (selectedGroup.isNotEmpty()) {
+                            Text("Using group: $selectedGroup", style = MaterialTheme.typography.bodySmall, color = MoneeAmber)
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        WrapParticipantsChips(participants = participants)
+                    }
+                }
+
+                item {
+                    Column {
+                        Text("Expense Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        expenseItems.forEachIndexed { index, itemState ->
+                            key(itemState.item.splitItemId) {
+                                ExpenseItemCard(
+                                    itemState = itemState,
+                                    participants = participants,
+                                    onRemove = { expenseItems = expenseItems.filterIndexed { i, _ -> i != index } },
+                                    onUpdate = { updated ->
+                                        expenseItems = expenseItems.toMutableList().also { it[index] = updated }
+                                    }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        MoneeGradientButton(
+                            onClick = {
+                                val newItem = ExpenseItemState(
+                                    item = SplitItem(
+                                        splitItemId = UUID.randomUUID().toString(),
+                                        splitBillId = "",
+                                        description = "",
+                                        amount = 0.0,
+                                        quantity = 1,
+                                        payerId = null
+                                    ),
+                                    assignedMemberIds = emptyList(),
+                                    splitMode = "equal",
+                                    percentages = emptyMap()
+                                )
+                                expenseItems = expenseItems + newItem
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add Item", fontWeight = FontWeight.SemiBold)
                         }
                     }
-
-                    if (selectedGroup.isNotEmpty()) {
-                        Text("Using group: $selectedGroup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    WrapParticipantsChips(participants = participants)
                 }
-            }
 
-            item {
-                Column {
-                    Text("Expense Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(8.dp))
+                item {
+                    Column {
+                        Text("Tax & Charges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    expenseItems.forEachIndexed { index, itemState ->
-                        key(itemState.item.splitItemId) {
-                            ExpenseItemCard(
-                                itemState = itemState,
-                                participants = participants,
-                                onRemove = { expenseItems = expenseItems.filterIndexed { i, _ -> i != index } },
-                                onUpdate = { updated ->
-                                    expenseItems = expenseItems.toMutableList().also { it[index] = updated }
-                                }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("SST (%)")
+                            OutlinedTextField(
+                                value = sstPercent,
+                                onValueChange = { if (it.matches(DECIMAL_REGEX)) sstPercent = it },
+                                modifier = Modifier.width(100.dp),
+                                suffix = { Text("%") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = moneeFieldColors()
                             )
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    Button(
-                        onClick = {
-                            val newItem = ExpenseItemState(
-                                item = SplitItem(
-                                    splitItemId = UUID.randomUUID().toString(),
-                                    splitBillId = "",
-                                    description = "",
-                                    amount = 0.0,
-                                    quantity = 1,
-                                    payerId = null
-                                ),
-                                assignedMemberIds = emptyList(),
-                                splitMode = "equal",
-                                percentages = emptyMap()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Service Charge (%)")
+                            OutlinedTextField(
+                                value = serviceChargePercent,
+                                onValueChange = { if (it.matches(DECIMAL_REGEX)) serviceChargePercent = it },
+                                modifier = Modifier.width(100.dp),
+                                suffix = { Text("%") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = moneeFieldColors()
                             )
-                            expenseItems = expenseItems + newItem
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                        }
+                    }
+                }
+
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .moneeHero(RoundedCornerShape(16.dp))
                     ) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add Item")
-                    }
-                }
-            }
-
-            item {
-                Column {
-                    Text("Tax & Charges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("SST (%)")
-                        OutlinedTextField(
-                            value = sstPercent,
-                            onValueChange = { if (it.matches(DECIMAL_REGEX)) sstPercent = it },
-                            modifier = Modifier.width(100.dp),
-                            suffix = { Text("%") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Service Charge (%)")
-                        OutlinedTextField(
-                            value = serviceChargePercent,
-                            onValueChange = { if (it.matches(DECIMAL_REGEX)) serviceChargePercent = it },
-                            modifier = Modifier.width(100.dp),
-                            suffix = { Text("%") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                        )
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Subtotal")
-                            Text("RM %.2f".format(subtotal))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("SST")
-                            Text("RM %.2f".format(sstAmount))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Service Charge")
-                            Text("RM %.2f".format(serviceChargeAmount))
-                        }
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Total", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Text("RM %.2f".format(totalAmount), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Subtotal")
+                                Text("RM %.2f".format(subtotal))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("SST")
+                                Text("RM %.2f".format(sstAmount))
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Service Charge")
+                                Text("RM %.2f".format(serviceChargeAmount))
+                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.7f))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Total", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Text("RM %.2f".format(totalAmount), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            }
                         }
                     }
                 }
-            }
 
-            item {
-                Button(
-                    onClick = { createBill() },
-                    enabled = canCreate,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    if (uiState.isCreating) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    } else {
-                        Text("✓ Create Split Bill", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                item {
+                    MoneeGradientButton(
+                        onClick = { createBill() },
+                        enabled = canCreate,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                    ) {
+                        if (uiState.isCreating) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MoneeInk, strokeWidth = 2.dp)
+                        } else {
+                            Text("✓ Create Split Bill", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
                     }
-                }
 
-                uiState.error?.let { error ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    uiState.error?.let { error ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -484,7 +521,9 @@ fun ManageGroupDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MoneeCream),
+            border = BorderStroke(1.dp, MoneeBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -495,14 +534,31 @@ fun ManageGroupDialog(
                 Text(
                     "Manage Participants & Groups",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MoneeInk
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                TabRow(selectedTabIndex = tabIndex) {
-                    Tab(selected = tabIndex == 0, onClick = { tabIndex = 0 }, text = { Text("Add People") })
-                    Tab(selected = tabIndex == 1, onClick = { tabIndex = 1 }, text = { Text("My Groups") })
-                    Tab(selected = tabIndex == 2, onClick = { tabIndex = 2 }, text = { Text("Create Group") })
+                TabRow(
+                    selectedTabIndex = tabIndex,
+                    containerColor = Color.Transparent,
+                    contentColor = MoneeInk
+                ) {
+                    Tab(
+                        selected = tabIndex == 0, onClick = { tabIndex = 0 },
+                        selectedContentColor = MoneeInk, unselectedContentColor = MoneeMuted,
+                        text = { Text("Add People") }
+                    )
+                    Tab(
+                        selected = tabIndex == 1, onClick = { tabIndex = 1 },
+                        selectedContentColor = MoneeInk, unselectedContentColor = MoneeMuted,
+                        text = { Text("My Groups") }
+                    )
+                    Tab(
+                        selected = tabIndex == 2, onClick = { tabIndex = 2 },
+                        selectedContentColor = MoneeInk, unselectedContentColor = MoneeMuted,
+                        text = { Text("Create Group") }
+                    )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -518,42 +574,48 @@ fun ManageGroupDialog(
                             label = { Text("Enter User ID") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text("e.g., user_abc123") }
+                            placeholder = { Text("e.g., user_abc123") },
+                            colors = moneeFieldColors()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Button(
+                        MoneeGradientButton(
                             onClick = { viewModel.searchUserById(searchUserId.trim()) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
                             enabled = searchUserId.isNotBlank() && !uiState.isSearching
                         ) {
                             if (uiState.isSearching) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MoneeInk)
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
-                            Text(if (uiState.isSearching) "Searching..." else "Search User")
+                            Text(if (uiState.isSearching) "Searching..." else "Search User", fontWeight = FontWeight.SemiBold)
                         }
 
                         uiState.searchedUser?.let { user ->
                             Spacer(modifier = Modifier.height(12.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                colors = CardDefaults.cardColors(containerColor = MoneeYellowSoft),
+                                border = BorderStroke(1.dp, MoneeBorder)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("✅ User Found!", fontWeight = FontWeight.SemiBold)
-                                    Text("Name: ${user.name}")
-                                    Text("ID: ${user.id}")
+                                    Text("✅ User Found!", fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                                    Text("Name: ${user.name}", color = MoneeInk)
+                                    Text("ID: ${user.id}", color = MoneeInk)
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
+                                    MoneeGradientButton(
                                         onClick = {
                                             onAddUser(user)
                                             viewModel.clearSearch()
                                             searchUserId = ""
                                         },
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp)
                                     ) {
-                                        Text("+ Add to Bill")
+                                        Text("+ Add to Bill", fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -565,7 +627,7 @@ fun ManageGroupDialog(
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider()
+                        HorizontalDivider(color = MoneeBorder)
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text("Add Guest (No Account)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
@@ -577,26 +639,29 @@ fun ManageGroupDialog(
                             label = { Text("Name") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text("Enter guest name") }
+                            placeholder = { Text("Enter guest name") },
+                            colors = moneeFieldColors()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Button(
+                        MoneeGradientButton(
                             onClick = {
                                 if (nonUserName.isNotBlank()) {
                                     onAddNonUser(nonUserName.trim())
                                     nonUserName = ""
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
                             enabled = nonUserName.isNotBlank()
                         ) {
-                            Text("+ Add Guest")
+                            Text("+ Add Guest", fontWeight = FontWeight.SemiBold)
                         }
 
                         // Current participants with remove buttons
                         Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider()
+                        HorizontalDivider(color = MoneeBorder)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("Current Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                         currentParticipants.forEach { p ->
@@ -624,7 +689,7 @@ fun ManageGroupDialog(
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                                 contentAlignment = Alignment.Center
-                            ) { CircularProgressIndicator() }
+                            ) { CircularProgressIndicator(color = MoneeYellow) }
                         } else if (uiState.groups.isEmpty()) {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
@@ -632,7 +697,7 @@ fun ManageGroupDialog(
                             ) {
                                 Text(
                                     "No saved groups yet.\nCreate one in the 'Create Group' tab!",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MoneeMuted,
                                     textAlign = TextAlign.Center
                                 )
                             }
@@ -660,7 +725,9 @@ fun ManageGroupDialog(
                                                             onGroupSelected(group.name, people)
                                                         }
                                                 }
-                                            }
+                                            },
+                                        colors = moneeCardColors(),
+                                        border = BorderStroke(1.dp, MoneeBorder)
                                     ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -668,11 +735,11 @@ fun ManageGroupDialog(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column {
-                                                Text(group.name, fontWeight = FontWeight.SemiBold)
+                                                Text(group.name, fontWeight = FontWeight.SemiBold, color = MoneeInk)
                                                 Text(
                                                     "Created for you",
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = MoneeMuted
                                                 )
                                             }
                                             IconButton(onClick = { viewModel.deleteGroup(group.groupId) }) {
@@ -696,7 +763,8 @@ fun ManageGroupDialog(
                             label = { Text("Group Name") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text("e.g., Roommates, Dinner Friends") }
+                            placeholder = { Text("e.g., Roommates, Dinner Friends") },
+                            colors = moneeFieldColors()
                         )
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -722,19 +790,24 @@ fun ManageGroupDialog(
                                         selectedMembersForGroup =
                                             if (it) selectedMembersForGroup + member.id
                                             else selectedMembersForGroup - member.id
-                                    }
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MoneeYellow,
+                                        checkmarkColor = MoneeInk,
+                                        uncheckedColor = MoneeMuted
+                                    )
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(member.name)
                                 if (member.userId == currentUserId) {
-                                    Text(" (You)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                                    Text(" (You)", color = MoneeAmber, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        Button(
+                        MoneeGradientButton(
                             onClick = {
                                 if (newGroupName.isNotBlank() && selectedMembersForGroup.any { it != "m_$currentUserId" }) {
                                     val newGroup = ParticipantGroup(
@@ -764,10 +837,12 @@ fun ManageGroupDialog(
                                     )
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
                             enabled = newGroupName.isNotBlank() && selectedMembersForGroup.any { it != "m_$currentUserId" }
                         ) {
-                            Text("💾 Save Group")
+                            Text("💾 Save Group", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -778,7 +853,12 @@ fun ManageGroupDialog(
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, MoneeBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MoneeInk)
+                ) {
                     Text("Close")
                 }
             }
@@ -795,22 +875,9 @@ fun WrapParticipantsChips(participants: List<TempParticipant>) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         participants.forEach { member ->
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = if (member.isUser)
-                    MaterialTheme.colorScheme.primaryContainer
-                else
-                    MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Text(
-                    member.name,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    fontSize = 14.sp,
-                    color = if (member.isUser)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                )
+            // You / registered users get the yellow gradient, guests the plain white chip
+            MoneeChip(selected = member.isUser) {
+                Text(member.name, fontSize = 14.sp)
             }
         }
     }
@@ -843,7 +910,9 @@ fun ExpenseItemCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = moneeCardColors(),
+        border = BorderStroke(1.dp, MoneeBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: total + remove
@@ -857,7 +926,7 @@ fun ExpenseItemCard(
                     Text("RM %.2f".format(itemTotal), fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, "Remove item", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Close, "Remove item", tint = MoneeMuted)
                     }
                 }
             }
@@ -871,7 +940,8 @@ fun ExpenseItemCard(
                 label = { Text("Description") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp),
+                colors = moneeFieldColors()
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -888,7 +958,8 @@ fun ExpenseItemCard(
                     modifier = Modifier.weight(2f),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = moneeFieldColors()
                 )
                 OutlinedTextField(
                     value = quantityText,
@@ -903,7 +974,8 @@ fun ExpenseItemCard(
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = moneeFieldColors()
                 )
             }
 
@@ -913,14 +985,16 @@ fun ExpenseItemCard(
             Text(
                 "Assigned to",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MoneeMuted
             )
             Spacer(modifier = Modifier.height(4.dp))
             Box {
                 OutlinedButton(
                     onClick = { showAssignDropdown = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MoneeBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MoneeInk)
                 ) {
                     val names = assignees.joinToString(", ") { id ->
                         participants.find { it.id == id }?.name ?: "Unknown"
@@ -929,7 +1003,8 @@ fun ExpenseItemCard(
                 }
                 DropdownMenu(
                     expanded = showAssignDropdown,
-                    onDismissRequest = { showAssignDropdown = false }
+                    onDismissRequest = { showAssignDropdown = false },
+                    containerColor = MoneeCream
                 ) {
                     participants.forEach { p ->
                         val selected = assignees.contains(p.id)
@@ -958,7 +1033,7 @@ fun ExpenseItemCard(
 
             // Split mode toggle
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
+                MoneeChip(
                     selected = itemState.splitMode == "equal",
                     onClick = {
                         onUpdate(
@@ -967,19 +1042,17 @@ fun ExpenseItemCard(
                                 percentages = equalPercentages(assignees)
                             )
                         )
-                    },
-                    label = { Text("Equal Split") }
-                )
-                FilterChip(
+                    }
+                ) { Text("Equal Split", fontSize = 13.sp) }
+                MoneeChip(
                     selected = itemState.splitMode == "custom",
                     onClick = {
                         val pcts =
                             if (assignees.all { itemState.percentages.containsKey(it) }) itemState.percentages
                             else equalPercentages(assignees)
                         onUpdate(itemState.copy(splitMode = "custom", percentages = pcts))
-                    },
-                    label = { Text("Custom %") }
-                )
+                    }
+                ) { Text("Custom %", fontSize = 13.sp) }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -997,7 +1070,7 @@ fun ExpenseItemCard(
                         Text(
                             "%.1f%%  RM %.2f".format(equalPct, share),
                             fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MoneeAmber
                         )
                     }
                 }
@@ -1041,7 +1114,8 @@ fun ExpenseItemCard(
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 shape = RoundedCornerShape(8.dp),
-                                textStyle = TextStyle(fontSize = 14.sp)
+                                textStyle = TextStyle(fontSize = 14.sp),
+                                colors = moneeFieldColors()
                             )
                             Text(
                                 "RM %.2f".format(amount),
@@ -1058,7 +1132,7 @@ fun ExpenseItemCard(
                 Text(
                     "Total: %.1f%%".format(totalPct),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (ok) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                    color = if (ok) MoneeMuted else MaterialTheme.colorScheme.error
                 )
                 if (!ok) {
                     Text(
