@@ -35,8 +35,8 @@ val MoneeAmber = Color(0xFFB8860B)        // readable gold for small text on whi
 val MoneeYellowLight = Color(0xFFFFE866)
 
 val MoneeScreenBrush: Brush = Brush.verticalGradient(
-    0f to MoneeYellowSoft,
-    0.35f to MoneeCream,
+    0f to MoneeCream,
+    0.25f to Color.White,
     1f to Color.White
 )
 
