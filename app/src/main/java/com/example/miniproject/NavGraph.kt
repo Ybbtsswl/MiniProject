@@ -63,9 +63,6 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     startDestination: String = Screen.Startup.route
 ) {
-    // ONE ViewModel shared by the list, create and detail screens.
-    // Calling viewModel() inside each composable() gives every destination its own
-    // instance, so the detail screen never saw the bills the list had loaded.
     val splitBillViewModel: SplitBillViewModel = viewModel()
 
     NavHost(
@@ -164,6 +161,7 @@ fun AppNavHost(
             val userId = supabaseClient.auth.currentUserOrNull()?.id
             ExpenseScreen(
                 userId = userId,
+                onBack = { navController.popBackStack() },
                 onAddClick = {
                     userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
                 },

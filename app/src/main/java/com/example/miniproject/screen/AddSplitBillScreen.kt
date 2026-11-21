@@ -50,6 +50,7 @@ import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeCardColors
 import com.example.miniproject.ui.theme.moneeFieldColors
 import com.example.miniproject.ui.theme.moneeHero
+import com.example.miniproject.ui.theme.moneeTopInsets
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import com.example.miniproject.viewmodel.UserResult
 import java.time.LocalDate
@@ -242,6 +243,7 @@ fun AddSplitBillScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                         }
                     },
+                    windowInsets = moneeTopInsets(),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,

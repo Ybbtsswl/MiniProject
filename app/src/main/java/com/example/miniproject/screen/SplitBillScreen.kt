@@ -42,6 +42,7 @@ import com.example.miniproject.ui.theme.MoneeYellow
 import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeCardColors
 import com.example.miniproject.ui.theme.moneeHero
+import com.example.miniproject.ui.theme.moneeTopInsets
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -118,6 +119,7 @@ fun SplitBillScreen(
                             )
                         }
                     },
+                    windowInsets = moneeTopInsets(),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,

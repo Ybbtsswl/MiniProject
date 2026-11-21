@@ -32,6 +32,7 @@ import com.example.miniproject.ui.theme.MoneeYellow
 import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeCardColors
 import com.example.miniproject.ui.theme.moneeHero
+import com.example.miniproject.ui.theme.moneeTopInsets
 import java.text.NumberFormat
 import java.util.*
 
@@ -113,6 +114,7 @@ fun SplitBillDetailScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
+                    windowInsets = moneeTopInsets(),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent,

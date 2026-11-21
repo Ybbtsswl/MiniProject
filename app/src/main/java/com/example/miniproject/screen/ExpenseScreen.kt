@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
@@ -60,6 +61,7 @@ import java.util.Locale
 fun ExpenseScreen(
     onAddClick: () -> Unit,
     onSeeAllClick: () -> Unit = {},
+    onBack: () -> Unit = {},
     userId: String? = null,
     viewModel: ExpenseViewModel = viewModel()
 ) {
@@ -92,6 +94,11 @@ fun ExpenseScreen(
     val monthlyTotal = expenses.sumOf { it.amount }
     val monthChange = -12.4
 
+    // Status bar + camera cut-out (top) and the sides, so the header is never covered
+    val topInsets = WindowInsets.systemBars
+        .union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -100,31 +107,35 @@ fun ExpenseScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .windowInsetsPadding(topInsets)
                 .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "←",
-                    fontSize = 20.sp,
-                    color = MoneeInk,
-                    modifier = Modifier.clickable { }
-                )
+                // A real button now: 48dp touch target, ripple, screen-reader label
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MoneeInk
+                    )
+                }
                 Text(
                     text = "Expenses",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MoneeInk
                 )
-                Spacer(modifier = Modifier.width(24.dp))
+                // same width as the back button so the title stays centred
+                Spacer(modifier = Modifier.width(48.dp))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -361,7 +372,8 @@ fun ExpenseScreen(
                 .background(
                     Brush.verticalGradient(listOf(Color.Transparent, Color.White))
                 )
-                .padding(top = 24.dp, bottom = 24.dp)
+                .navigationBarsPadding()          // stay clear of the gesture / nav bar
+                .padding(top = 24.dp, bottom = 16.dp)
         ) {
             MoneeGradientButton(
                 onClick = onAddClick,
