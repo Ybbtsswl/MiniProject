@@ -1,14 +1,11 @@
 package com.example.miniproject.screen
 
 import android.annotation.SuppressLint
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,1090 +13,1009 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.example.miniproject.data.GroupMember
 import com.example.miniproject.data.ParticipantGroup
+import kotlinx.coroutines.launch
 import com.example.miniproject.data.SplitAllocation
 import com.example.miniproject.data.SplitBill
 import com.example.miniproject.data.SplitItem
 import com.example.miniproject.data.SplitMember
-import com.example.miniproject.ui.theme.MoneeGreen
-import com.example.miniproject.ui.theme.MoneeYellow
-import kotlinx.coroutines.launch
-import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.*
+import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.viewmodel.SplitBillViewModel
+import com.example.miniproject.viewmodel.UserResult
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 // ==========================================
-// 🛠️ HELPER FUNCTIONS
+// DATA CLASSES
 // ==========================================
-private var billCounter = 0
-private var itemCounter = 0
-private var memberCounter = 0
-private var allocationCounter = 0
-private var groupCounter = 0
-
-@SuppressLint("DefaultLocale")
-fun generateBillId(): String = "BILL${String.format("%03d", ++billCounter)}"
-@SuppressLint("DefaultLocale")
-fun generateItemId(): String = "ITEM${String.format("%03d", ++itemCounter)}"
-@SuppressLint("DefaultLocale")
-fun generateMemberId(): String = "MEMBER${String.format("%03d", ++memberCounter)}"
-@SuppressLint("DefaultLocale")
-fun generateAllocationId(): String = "ALLOC${String.format("%03d", ++allocationCounter)}"
-@SuppressLint("DefaultLocale")
-fun generateGroupId(): String = "GRP${String.format("%03d", ++groupCounter)}"
-
-private fun formatCurrency(amount: Double): String {
-    return NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ms_MY"))
-        .apply { maximumFractionDigits = 2 }
-        .format(amount)
-        .replace("MYR", "RM")
-}
-
-private fun getCurrentDate(): String {
-    return SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
-}
-
-// ==========================================
-// 📦 DATA — Item Participant with Amount
-// ==========================================
-data class ItemParticipant(
-    val memberId: String,
-    val name: String,
-    val amount: Double = 0.0,
-    val isIncluded: Boolean = true
-)
-
-data class BillItemWithParticipants(
+data class ExpenseItemState(
     val item: SplitItem,
-    val participants: List<ItemParticipant> = emptyList()
+    val assignedMemberIds: List<String>,
+    val splitMode: String,                 // "equal" | "custom"
+    val percentages: Map<String, Double>
 )
 
+data class TempParticipant(
+    val id: String,
+    val name: String,
+    val isUser: Boolean,
+    val userId: String? = null
+)
+
+private val DECIMAL_REGEX = Regex("^\\d*\\.?\\d*$")
+
 // ==========================================
-// 📱 MAIN SCREEN
+// MAIN SCREEN
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSplitBillScreen(
     userId: String,
-    viewModel: com.example.miniproject.viewmodel.SplitBillViewModel,
+    viewModel: SplitBillViewModel,
     onBack: () -> Unit,
-    onCreateSplit: (SplitBill, List<SplitMember>, List<SplitItem>, List<SplitAllocation>) -> Unit,
-    onSaveGroup: suspend (ParticipantGroup) -> Result<String> = { Result.failure(Exception("Not implemented")) },
-    onLoadGroup: suspend (String) -> Result<List<SplitMember>> = { Result.success(emptyList()) },
-    onLookupUser: suspend (String) -> Result<String>,
-    modifier: Modifier = Modifier
+    onSuccess: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
-    // 📝 State
-    var billTitle by remember { mutableStateOf("") }
-    var billDate by remember { mutableStateOf(getCurrentDate()) }
-    var splitMembers by remember { mutableStateOf(listOf<SplitMember>()) }
-    var billItems by remember { mutableStateOf(listOf<BillItemWithParticipants>()) }
-    var splitMode by remember { mutableStateOf("equal") }  // equal, custom
-    var showSummary by remember { mutableStateOf(false) }
-
-    // Group Dialogs
-    var showGroupDialog by remember { mutableStateOf(false) }
-    var showSaveGroupDialog by remember { mutableStateOf(false) }
-    var newGroupName by remember { mutableStateOf("") }
-
-    // Dialogs
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showMemberDialog by remember { mutableStateOf(false) }
-
-    // Validation & Errors
-    var titleError by remember { mutableStateOf<String?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    // Auto-calculations
-    val totalAmount = remember(billItems) {
-        billItems.sumOf { it.item.amount }
-    }
-
-    // Calculate each participant's TOTAL share across ALL items
-    val participantTotals = remember(billItems, splitMode) {
-        buildMap<String, Double> {
-            splitMembers.forEach { member ->
-                var totalShare = 0.0
-                billItems.forEach { item ->
-                    val part = item.participants.find { it.memberId == member.splitMemberId }
-                    if (part != null && part.isIncluded) {
-                        totalShare += when (splitMode) {
-                            "equal" -> {
-                                val includedCount = item.participants.count { it.isIncluded }
-                                if (includedCount > 0) item.item.amount / includedCount else 0.0
-                            }
-                            else -> part.amount
-                        }
-                    }
-                }
-                put(member.splitMemberId, totalShare)
-            }
-        }
-    }
-
-    // Initialize with current user
+    // Load saved groups when screen opens
     LaunchedEffect(Unit) {
-        val alreadyHasMe = splitMembers.any { it.userId == userId }
-        if (!alreadyHasMe) {
-            splitMembers = listOf(
-                SplitMember(
-                    splitMemberId = generateMemberId(),
-                    splitBillId = "",
-                    userId = userId,
-                    name = "You",
-                    joinedAt = System.currentTimeMillis().toString()
-                )
+        viewModel.loadGroups(userId)
+    }
+
+    var billTitle by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf("") }
+    var showManageDialog by remember { mutableStateOf(false) }
+    var participants by remember {
+        mutableStateOf(
+            listOf(TempParticipant(id = "m_$userId", name = "You", isUser = true, userId = userId))
+        )
+    }
+    var expenseItems by remember { mutableStateOf(listOf<ExpenseItemState>()) }
+    var sstPercent by remember { mutableStateOf("6") }
+    var serviceChargePercent by remember { mutableStateOf("10") }
+
+    // Totals
+    val subtotal = expenseItems.sumOf { it.item.amount * it.item.quantity }
+    val sstAmount = subtotal * (sstPercent.toDoubleOrNull() ?: 0.0) / 100
+    val serviceChargeAmount = subtotal * (serviceChargePercent.toDoubleOrNull() ?: 0.0) / 100
+    val totalAmount = subtotal + sstAmount + serviceChargeAmount
+
+    val canCreate = billTitle.isNotBlank() &&
+            participants.size >= 2 &&
+            expenseItems.isNotEmpty() &&
+            expenseItems.all {
+                it.item.description.isNotBlank() &&
+                        it.item.amount > 0 &&
+                        it.assignedMemberIds.isNotEmpty()
+            } &&
+            !uiState.isCreating
+
+    fun createBill() {
+        if (!canCreate) return
+
+        val newBill = SplitBill(
+            splitBillId = UUID.randomUUID().toString(),
+            title = billTitle,
+            totalAmount = totalAmount,
+            creatorId = userId,
+            billDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
+            status = "ACTIVE",
+            participantCount = participants.size
+        )
+
+        // Fresh member id per bill: reusing "m_<userId>" collides on the primary key
+        // as soon as the same person is in a second bill.
+        val memberIdMap = participants.associate { it.id to UUID.randomUUID().toString() }
+        val myMemberId = memberIdMap.getValue("m_$userId")
+
+        val members = participants.map { p ->
+            SplitMember(
+                splitMemberId = memberIdMap.getValue(p.id),
+                splitBillId = "",
+                userId = if (p.isUser) p.userId else null,
+                name = p.name,
+                joinedAt = LocalDate.now().toString(),
+                isMe = p.id == "m_$userId"
             )
         }
-    }
 
-    // Update item participants when members or split mode changes
-    LaunchedEffect(splitMembers, splitMode) {
-        billItems = billItems.map { itemWithParts ->
-            val updatedParticipants = splitMembers.map { member ->
-                val existing = itemWithParts.participants.find { it.memberId == member.splitMemberId }
-                val amount = if (splitMode == "equal") {
-                    val includedCount = itemWithParts.participants.count { it.isIncluded }
-                    if (includedCount > 0) itemWithParts.item.amount / includedCount else 0.0
-                } else {
-                    existing?.amount ?: 0.0
-                }
-                ItemParticipant(
-                    memberId = member.splitMemberId,
-                    name = member.name,
-                    amount = amount,
-                    isIncluded = existing?.isIncluded ?: true
+        // The creator paid, so they are the payer (the ViewModel's owe/owed maths needs this)
+        val items = expenseItems.map { it.item.copy(splitBillId = "", payerId = myMemberId) }
+
+        // Spread SST + service charge proportionally across every share
+        val taxFactor = if (subtotal > 0) totalAmount / subtotal else 1.0
+
+        val allocations = mutableListOf<SplitAllocation>()
+        expenseItems.forEach { state ->
+            val itemTotal = state.item.amount * state.item.quantity
+            val ids = state.assignedMemberIds
+            val pcts: Map<String, Double> =
+                if (state.splitMode == "equal") ids.associateWith { 100.0 / ids.size }
+                else ids.associateWith { state.percentages[it] ?: 0.0 }
+
+            pcts.forEach { (memberId, percent) ->
+                allocations.add(
+                    SplitAllocation(
+                        splitAllocationId = UUID.randomUUID().toString(),
+                        splitItemId = state.item.splitItemId,
+                        splitMemberId = memberIdMap.getValue(memberId),
+                        shareAmount = itemTotal * percent / 100.0 * taxFactor,
+                        isPaid = false,
+                        paidAt = null,
+                        payerId = null,
+                        contributionType = state.splitMode,
+                        contributionValue = percent
+                    )
                 )
             }
-            itemWithParts.copy(participants = updatedParticipants)
         }
-    }
 
-    // Validation function
-    fun validate(): Boolean {
-        titleError = null
-        errorMessage = null
-
-        if (billTitle.isBlank()) {
-            titleError = "Please enter a bill name"
-            return false
-        }
-        if (billItems.isEmpty()) {
-            errorMessage = "Please add at least one expense item"
-            return false
-        }
-        if (splitMembers.size < 2) {
-            errorMessage = "Add at least 2 participants to split a bill"
-            return false
-        }
-        billItems.forEachIndexed { index, item ->
-            if (item.item.amount <= 0.0) {
-                errorMessage = "Item ${index + 1} amount must be greater than 0"
-                return false
-            }
-            val includedParts = item.participants.filter { it.isIncluded }
-            if (includedParts.isEmpty()) {
-                errorMessage = "Item ${index + 1} must have at least one participant"
-                return false
-            }
-            if (splitMode == "custom") {
-                val totalAlloc = includedParts.sumOf { it.amount }
-                if (Math.abs(totalAlloc - item.item.amount) > 0.01) {
-                    errorMessage = "Item ${index + 1}: total must equal ${formatCurrency(item.item.amount)}"
-                    return false
-                }
-            }
-        }
-        return true
+        viewModel.createSplitBill(
+            bill = newBill,
+            members = members,
+            items = items,
+            allocations = allocations,
+            onSuccess = { onSuccess() },
+            onError = { }
+        )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Split Bill", fontWeight = FontWeight.SemiBold) },
+                title = { Text("Create Split Bill") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 }
             )
-        },
-        modifier = modifier
+        }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ===== ❌ ERROR MESSAGE =====
-            errorMessage?.let {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE5E5)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = it,
-                        color = Color(0xFFCC0000),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+            item {
+                OutlinedTextField(
+                    value = billTitle,
+                    onValueChange = { billTitle = it },
+                    label = { Text("Bill Title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
             }
 
-            // ===== 📝 BILL DETAILS =====
-            OutlinedTextField(
-                value = billTitle,
-                onValueChange = { billTitle = it; titleError = null },
-                label = { Text("Bill Name *") },
-                placeholder = { Text("e.g. Dinner with friends") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                isError = titleError != null,
-                supportingText = { titleError?.let { Text(it) } },
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = billDate,
-                onValueChange = {},
-                label = { Text("Date") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = "Select date")
-                    }
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ===== 👥 PARTICIPANT GROUPS =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4E8))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Participant Groups",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { showGroupDialog = true },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MoneeGreen,
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Load Group", fontSize = 13.sp)
-                        }
-                        Button(
-                            onClick = { showSaveGroupDialog = true },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MoneeYellow,
-                                contentColor = Color(0xFF2D2D2D)
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Save, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Save Group", fontSize = 13.sp)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ===== ⚖️ SPLIT MODE =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F6ED))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Split Method",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = splitMode == "equal",
-                            onClick = { splitMode = "equal" },
-                            label = { Text("Equally") },
-                            leadingIcon = { if (splitMode == "equal") Text("✓") }
-                        )
-                        FilterChip(
-                            selected = splitMode == "custom",
-                            onClick = { splitMode = "custom" },
-                            label = { Text("By Contribution") },
-                            leadingIcon = { if (splitMode == "custom") Text("✓") }
-                        )
-                    }
-                    if (splitMode == "custom") {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Set amounts per participant for each item",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ===== 👥 PARTICIPANTS SECTION =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F6ED))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            item {
+                Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Participants (${splitMembers.size})",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        TextButton(onClick = { showMemberDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Manage", color = MoneeGreen)
+                        Text("Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        TextButton(onClick = { showManageDialog = true }) {
+                            Text("Manage", color = MaterialTheme.colorScheme.primary)
                         }
                     }
 
+                    if (selectedGroup.isNotEmpty()) {
+                        Text("Using group: $selectedGroup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    WrapParticipantsChips(participants = participants)
+                }
+            }
+
+            item {
+                Column {
+                    Text("Expense Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    splitMembers.forEach { member ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFE8E4D9)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = member.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = member.name,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = if (member.userId != null) "✓ App User" else "Guest",
-                                    fontSize = 11.sp,
-                                    color = if (member.userId != null) MoneeGreen else Color.Gray
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ===== 🛒 ITEMS =====
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Expense Items (${billItems.size})",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                TextButton(onClick = {
-                    val newItem = SplitItem(
-                        splitItemId = generateItemId(),
-                        splitBillId = "",
-                        description = "",
-                        amount = 0.0
-                    )
-                    val newParticipants = splitMembers.map { member ->
-                        ItemParticipant(
-                            memberId = member.splitMemberId,
-                            name = member.name,
-                            amount = 0.0,
-                            isIncluded = true
-                        )
-                    }
-                    billItems = billItems + BillItemWithParticipants(
-                        item = newItem,
-                        participants = newParticipants
-                    )
-                }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Item", color = MoneeGreen)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            billItems.forEachIndexed { itemIndex, itemWithParts ->
-                var itemDesc by remember { mutableStateOf(itemWithParts.item.description) }
-                var itemAmount by remember { mutableStateOf(itemWithParts.item.amount.toString()) }
-                var itemPayerId by remember(itemWithParts.item.payerId, splitMembers) {
-                    mutableStateOf(
-                        itemWithParts.item.payerId ?: splitMembers.firstOrNull()?.splitMemberId ?: ""
-                    )
-                }
-
-                LaunchedEffect(itemDesc, itemAmount, itemPayerId) {
-                    billItems = billItems.toMutableList().also { list ->
-                        list[itemIndex] = list[itemIndex].copy(
-                            item = list[itemIndex].item.copy(
-                                description = itemDesc,
-                                amount = itemAmount.toDoubleOrNull() ?: 0.0,
-                                payerId = itemPayerId
+                    expenseItems.forEachIndexed { index, itemState ->
+                        key(itemState.item.splitItemId) {
+                            ExpenseItemCard(
+                                itemState = itemState,
+                                participants = participants,
+                                onRemove = { expenseItems = expenseItems.filterIndexed { i, _ -> i != index } },
+                                onUpdate = { updated ->
+                                    expenseItems = expenseItems.toMutableList().also { it[index] = updated }
+                                }
                             )
-                        )
-                    }
-                }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Item ${itemIndex + 1}", fontWeight = FontWeight.Medium)
-                            if (billItems.size > 1) {
-                                IconButton(
-                                    onClick = {
-                                        billItems = billItems.toMutableList().also {
-                                            it.removeAt(itemIndex)
-                                        }
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        "Remove",
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
                         }
-
-                        OutlinedTextField(
-                            value = itemDesc,
-                            onValueChange = { itemDesc = it },
-                            placeholder = { Text("Item name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = itemAmount,
-                            onValueChange = { itemAmount = it },
-                            placeholder = { Text("0.00") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            prefix = { Text("RM ") },
-                            shape = RoundedCornerShape(8.dp)
-                        )
-
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "💳 Who paid for this item?",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(splitMembers) { member ->
-                                FilterChip(
-                                    selected = itemPayerId == member.splitMemberId,
-                                    onClick = { itemPayerId = member.splitMemberId },
-                                    label = { Text(member.name) }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Who pays for this item?",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        itemWithParts.participants.forEach { part ->
-                            val partAmount = remember(part.amount, itemWithParts.item.amount, splitMode) {
-                                if (splitMode == "equal" && itemWithParts.item.amount > 0) {
-                                    val includedCount = itemWithParts.participants.count { it.isIncluded }
-                                    if (includedCount > 0) itemWithParts.item.amount / includedCount else 0.0
-                                } else {
-                                    part.amount
-                                }
-                            }
-                            var localAmount by remember(partAmount) {
-                                mutableStateOf(if (partAmount > 0) String.format("%.2f", partAmount) else "")
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = part.isIncluded,
-                                    onCheckedChange = { checked ->
-                                        billItems = billItems.toMutableList().also { list ->
-                                            val updated = list[itemIndex].participants.map { p ->
-                                                if (p.memberId == part.memberId) p.copy(isIncluded = checked) else p
-                                            }
-                                            list[itemIndex] = list[itemIndex].copy(participants = updated)
-                                        }
-                                    }
-                                )
-                                Text(
-                                    text = part.name,
-                                    modifier = Modifier.weight(1f),
-                                    fontSize = 14.sp
-                                )
-                                if (splitMode == "custom" && part.isIncluded) {
-                                    OutlinedTextField(
-                                        value = localAmount,
-                                        onValueChange = { newVal ->
-                                            localAmount = newVal
-                                            val newAmount = newVal.toDoubleOrNull() ?: 0.0
-                                            billItems = billItems.toMutableList().also { list ->
-                                                val updated = list[itemIndex].participants.map { p ->
-                                                    if (p.memberId == part.memberId) p.copy(amount = newAmount) else p
-                                                }
-                                                list[itemIndex] = list[itemIndex].copy(participants = updated)
-                                            }
-                                        },
-                                        modifier = Modifier.width(100.dp),
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        prefix = { Text("RM ") },
-                                        shape = RoundedCornerShape(6.dp),
-                                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
-                                    )
-                                } else if (part.isIncluded) {
-                                    Text(
-                                        text = formatCurrency(partAmount),
-                                        fontSize = 13.sp,
-                                        color = MoneeGreen
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // ===== 🧾 SUMMARY =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MoneeYellow)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Total Amount", fontSize = 14.sp, color = Color.Gray)
-                        Text(formatCurrency(totalAmount), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Participants", fontSize = 13.sp, color = Color.Gray)
-                        Text("${splitMembers.size} people", fontSize = 13.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ✅ CREATE BUTTON
-            Button(
-                onClick = {
-                    if (!validate()) return@Button
-
-                    val billId = generateBillId()
-
-                    val finalMembers = splitMembers.map { m ->
-                        m.copy(
-                            splitBillId = billId,
-                            joinedAt = System.currentTimeMillis().toString()
-                        )
                     }
 
-                    val finalItems = billItems.mapIndexed { idx, item ->
-                        item.item.copy(splitBillId = billId)
-                    }
-
-                    val finalAllocations = mutableListOf<SplitAllocation>()
-                    billItems.forEachIndexed { idx, itemWithParts ->
-                        val item = finalItems[idx]
-                        itemWithParts.participants
-                            .filter { it.isIncluded && it.amount > 0 }
-                            .forEach { part ->
-                                finalAllocations.add(
-                                    SplitAllocation(
-                                        splitAllocationId = generateAllocationId(),
-                                        splitItemId = item.splitItemId,
-                                        splitMemberId = part.memberId,
-                                        payerId = item.payerId,
-                                        shareAmount = part.amount,
-                                        isPaid = (splitMembers.find { it.splitMemberId == part.memberId }?.userId == userId),
-                                        paidAt = if (splitMembers.find { it.splitMemberId == part.memberId }?.userId == userId)
-                                            System.currentTimeMillis().toString() else null
-                                    )
-                                )
-                            }
-                    }
-
-                    val newBill = SplitBill(
-                        splitBillId = billId,
-                        creatorId = userId,
-                        title = billTitle,
-                        totalAmount = totalAmount,
-                        billDate = billDate,
-                        status = "ACTIVE",
-                        participantCount = finalMembers.size
-                    )
-
-                    onCreateSplit(newBill, finalMembers, finalItems, finalAllocations)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MoneeGreen,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(50.dp)
-            ) {
-                Text(
-                    text = "Create Split Bill",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
-        }
-    }
-
-    // 📅 Date Picker Dialog
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState()
-        DatePickerDialog(
-            onDateSelected = { millis ->
-                millis?.let {
-                    billDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it))
-                }
-                showDatePicker = false
-            },
-            onDismiss = { showDatePicker = false },
-            state = datePickerState
-        )
-    }
-
-    // 📂 LOAD GROUP DIALOG
-    if (showGroupDialog) {
-        LaunchedEffect(Unit) {
-            viewModel.loadGroups(userId)
-        }
-        val groups by viewModel.uiState.collectAsState()
-
-        AlertDialog(
-            onDismissRequest = { showGroupDialog = false },
-            title = { Text("Load Participant Group") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    if (groups.groups.isEmpty()) {
-                        Text("No saved groups yet.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
-                    } else {
-                        LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
-                            items(groups.groups) { group ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clickable {
-                                            scope.launch {
-                                                val result = onLoadGroup(group.groupId)
-                                                result.onSuccess { loadedMembers ->
-                                                    if (loadedMembers.isNotEmpty()) {
-                                                        val me = splitMembers.firstOrNull { it.userId == userId }
-                                                        val others = loadedMembers.filter { it.userId != userId }
-                                                        splitMembers = listOfNotNull(me) + others
-
-                                                        billItems = billItems.map { item ->
-                                                            val newParts = splitMembers.map { m ->
-                                                                ItemParticipant(
-                                                                    memberId = m.splitMemberId,
-                                                                    name = m.name,
-                                                                    amount = 0.0,
-                                                                    isIncluded = true
-                                                                )
-                                                            }
-                                                            item.copy(participants = newParts)
-                                                        }
-                                                    }
-                                                    showGroupDialog = false
-                                                }
-                                            }
-                                        },
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(group.name, modifier = Modifier.padding(12.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showGroupDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    // 💾 SAVE GROUP DIALOG
-    if (showSaveGroupDialog) {
-        AlertDialog(
-            onDismissRequest = { showSaveGroupDialog = false },
-            title = { Text("Save Participant Group") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = newGroupName,
-                        onValueChange = { newGroupName = it },
-                        label = { Text("Group Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        text = "${splitMembers.size} participants will be saved",
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newGroupName.isNotBlank()) {
-                            val newGroup = ParticipantGroup(
-                                groupId = generateGroupId(),
-                                userId = userId,
-                                name = newGroupName
-                            )
-                            scope.launch {
-                                onSaveGroup(newGroup)
-                                    .onSuccess {
-                                        newGroupName = ""
-                                        showSaveGroupDialog = false
-                                    }
-                            }
-                        }
-                    }
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSaveGroupDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    // 👥 MANAGE MEMBERS DIALOG
-    if (showMemberDialog) {
-        var lookupError by remember { mutableStateOf<String?>(null) }
-
-        AlertDialog(
-            onDismissRequest = { showMemberDialog = false },
-            title = { Text("Manage Participants", fontWeight = FontWeight.SemiBold) },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.heightIn(max = 300.dp)
-                    ) {
-                        items(splitMembers) { member ->
-                            var name by remember { mutableStateOf(member.name) }
-                            var isAppUser by remember { mutableStateOf(member.userId != null) }
-                            var userIdInput by remember { mutableStateOf(member.userId ?: "") }
-                            var isLookingUp by remember { mutableStateOf(false) }
-
-                            LaunchedEffect(member.userId) {
-                                isAppUser = member.userId != null
-                                userIdInput = member.userId ?: ""
-                            }
-
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        FilterChip(
-                                            selected = !isAppUser,
-                                            onClick = { isAppUser = false; userIdInput = ""; name = "" },
-                                            label = { Text("Guest") }
-                                        )
-                                        FilterChip(
-                                            selected = isAppUser,
-                                            onClick = { isAppUser = true; name = "" },
-                                            label = { Text("App User") }
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    if (isAppUser) {
-                                        OutlinedTextField(
-                                            value = userIdInput,
-                                            onValueChange = { userIdInput = it; lookupError = null },
-                                            label = { Text("User ID") },
-                                            placeholder = { Text("Enter User ID") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            singleLine = true,
-                                            trailingIcon = {
-                                                if (isLookingUp) {
-                                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                                }
-                                            },
-                                            supportingText = { lookupError?.let { Text(it, color = MaterialTheme.colorScheme.error) } }
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Button(
-                                            onClick = {
-                                                scope.launch {
-                                                    isLookingUp = true
-                                                    lookupError = null
-                                                    val result = onLookupUser(userIdInput.trim())
-                                                    result
-                                                        .onSuccess { fetchedName ->
-                                                            name = fetchedName
-                                                            val idx = splitMembers.indexOfFirst {
-                                                                it.splitMemberId == member.splitMemberId
-                                                            }
-                                                            if (idx != -1) {
-                                                                splitMembers = splitMembers.toMutableList().also { list ->
-                                                                    list[idx] = list[idx].copy(
-                                                                        userId = userIdInput.trim(),
-                                                                        name = fetchedName
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
-                                                        .onFailure {
-                                                            lookupError = "User not found — switch to Guest and enter name manually"
-                                                        }
-                                                    isLookingUp = false
-                                                }
-                                            },
-                                            enabled = userIdInput.isNotBlank() && !isLookingUp,
-                                            modifier = Modifier.align(Alignment.End)
-                                        ) {
-                                            Text("Find Name")
-                                        }
-                                        if (name.isNotEmpty()) {
-                                            Text(
-                                                text = "✓ Found: $name",
-                                                color = MoneeGreen,
-                                                fontSize = 13.sp,
-                                                modifier = Modifier.padding(top = 4.dp)
-                                            )
-                                        }
-                                    } else {
-                                        OutlinedTextField(
-                                            value = name,
-                                            onValueChange = {
-                                                name = it
-                                                val idx = splitMembers.indexOfFirst {
-                                                    it.splitMemberId == member.splitMemberId
-                                                }
-                                                if (idx != -1) {
-                                                    splitMembers = splitMembers.toMutableList().also { list ->
-                                                        list[idx] = list[idx].copy(name = it)
-                                                    }
-                                                }
-                                            },
-                                            label = { Text("Name") },
-                                            modifier = Modifier
-                                                .fillMaxWidth(),
-                                            singleLine = true
-                                        )
-                                    }
-
-                                    if (splitMembers.size > 1 && member.userId != userId) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        TextButton(
-                                            onClick = {
-                                                splitMembers = splitMembers.toMutableList().also {
-                                                    it.removeAt(it.indexOfFirst { m ->
-                                                        m.splitMemberId == member.splitMemberId
-                                                    })
-                                                }
-                                            },
-                                            colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                                        ) {
-                                            Text("Remove Participant")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            splitMembers = splitMembers + SplitMember(
-                                splitMemberId = generateMemberId(),
-                                splitBillId = "",
-                                userId = null,
-                                name = "",
-                                joinedAt = System.currentTimeMillis().toString()
+                            val newItem = ExpenseItemState(
+                                item = SplitItem(
+                                    splitItemId = UUID.randomUUID().toString(),
+                                    splitBillId = "",
+                                    description = "",
+                                    amount = 0.0,
+                                    quantity = 1,
+                                    payerId = null
+                                ),
+                                assignedMemberIds = emptyList(),
+                                splitMode = "equal",
+                                percentages = emptyMap()
                             )
+                            expenseItems = expenseItems + newItem
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MoneeYellow.copy(alpha = 0.3f),
-                            contentColor = Color(0xFF2D2D2D)
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add Participant")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Item")
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val validNames = splitMembers.all { it.name.isNotBlank() }
-                        if (validNames) {
-                            showMemberDialog = false
+            }
+
+            item {
+                Column {
+                    Text("Tax & Charges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("SST (%)")
+                        OutlinedTextField(
+                            value = sstPercent,
+                            onValueChange = { if (it.matches(DECIMAL_REGEX)) sstPercent = it },
+                            modifier = Modifier.width(100.dp),
+                            suffix = { Text("%") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Service Charge (%)")
+                        OutlinedTextField(
+                            value = serviceChargePercent,
+                            onValueChange = { if (it.matches(DECIMAL_REGEX)) serviceChargePercent = it },
+                            modifier = Modifier.width(100.dp),
+                            suffix = { Text("%") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                    }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Subtotal")
+                            Text("RM %.2f".format(subtotal))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SST")
+                            Text("RM %.2f".format(sstAmount))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Service Charge")
+                            Text("RM %.2f".format(serviceChargeAmount))
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text("RM %.2f".format(totalAmount), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = { createBill() },
+                    enabled = canCreate,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
                 ) {
-                    Text("Save")
+                    if (uiState.isCreating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("✓ Create Split Bill", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+
+                uiState.error?.let { error ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+
+    if (showManageDialog) {
+        ManageGroupDialog(
+            viewModel = viewModel,
+            currentUserId = userId,
+            currentParticipants = participants,
+            onDismiss = { showManageDialog = false },
+            onAddUser = { user ->
+                if (participants.none { it.id == user.id || it.userId == user.id }) {
+                    participants = participants + TempParticipant(id = user.id, name = user.name, isUser = true, userId = user.id)
+                }
+                showManageDialog = false
+            },
+            onAddNonUser = { name ->
+                participants = participants + TempParticipant(id = "n_${System.currentTimeMillis()}", name = name, isUser = false)
+                showManageDialog = false
+            },
+            onRemoveParticipant = { id ->
+                if (id != "m_$userId") {
+                    participants = participants.filterNot { it.id == id }
+                    // drop removed person from item assignments
+                    expenseItems = expenseItems.map { st ->
+                        st.copy(
+                            assignedMemberIds = st.assignedMemberIds - id,
+                            percentages = st.percentages - id
+                        )
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showMemberDialog = false }) {
-                    Text("Cancel")
-                }
+            onGroupSelected = { groupName, members ->
+                selectedGroup = groupName
+                participants = (participants + members).distinctBy { it.id }
+                showManageDialog = false
             }
         )
     }
 }
 
 // ==========================================
-// 🧩 DATE PICKER COMPONENT
+// MANAGE GROUP DIALOG
 // ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DatePickerDialog(
-    onDateSelected: (Long?) -> Unit,
+fun ManageGroupDialog(
+    viewModel: SplitBillViewModel,
+    currentUserId: String,
+    currentParticipants: List<TempParticipant>,
     onDismiss: () -> Unit,
-    state: DatePickerState
+    onAddUser: (UserResult) -> Unit,
+    onAddNonUser: (String) -> Unit,
+    onRemoveParticipant: (String) -> Unit,
+    onGroupSelected: (String, List<TempParticipant>) -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onDateSelected(state.selectedDateMillis) }) {
-                Text("OK")
+    val uiState by viewModel.uiState.collectAsState()
+    var tabIndex by remember { mutableIntStateOf(0) }
+    var searchUserId by remember { mutableStateOf("") }
+    var newGroupName by remember { mutableStateOf("") }
+    var selectedMembersForGroup by remember { mutableStateOf(setOf<String>()) }
+    var nonUserName by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "Manage Participants & Groups",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TabRow(selectedTabIndex = tabIndex) {
+                    Tab(selected = tabIndex == 0, onClick = { tabIndex = 0 }, text = { Text("Add People") })
+                    Tab(selected = tabIndex == 1, onClick = { tabIndex = 1 }, text = { Text("My Groups") })
+                    Tab(selected = tabIndex == 2, onClick = { tabIndex = 2 }, text = { Text("Create Group") })
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                when (tabIndex) {
+                    // ===== TAB 0: Search & Add User =====
+                    0 -> {
+                        Text("Search Registered User", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = searchUserId,
+                            onValueChange = { searchUserId = it },
+                            label = { Text("Enter User ID") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("e.g., user_abc123") }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = { viewModel.searchUserById(searchUserId.trim()) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = searchUserId.isNotBlank() && !uiState.isSearching
+                        ) {
+                            if (uiState.isSearching) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(if (uiState.isSearching) "Searching..." else "Search User")
+                        }
+
+                        uiState.searchedUser?.let { user ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("✅ User Found!", fontWeight = FontWeight.SemiBold)
+                                    Text("Name: ${user.name}")
+                                    Text("ID: ${user.id}")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = {
+                                            onAddUser(user)
+                                            viewModel.clearSearch()
+                                            searchUserId = ""
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("+ Add to Bill")
+                                    }
+                                }
+                            }
+                        }
+
+                        uiState.searchError?.let { error ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(error, color = MaterialTheme.colorScheme.error)
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text("Add Guest (No Account)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = nonUserName,
+                            onValueChange = { nonUserName = it },
+                            label = { Text("Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("Enter guest name") }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                if (nonUserName.isNotBlank()) {
+                                    onAddNonUser(nonUserName.trim())
+                                    nonUserName = ""
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = nonUserName.isNotBlank()
+                        ) {
+                            Text("+ Add Guest")
+                        }
+
+                        // Current participants with remove buttons
+                        Spacer(modifier = Modifier.height(20.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Current Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        currentParticipants.forEach { p ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(p.name)
+                                if (p.id != "m_$currentUserId") {
+                                    IconButton(onClick = { onRemoveParticipant(p.id) }) {
+                                        Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ===== TAB 1: Load Saved Groups =====
+                    1 -> {
+                        Text("Your Saved Groups", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (uiState.isLoadingGroups) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) { CircularProgressIndicator() }
+                        } else if (uiState.groups.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "No saved groups yet.\nCreate one in the 'Create Group' tab!",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.heightIn(max = 300.dp)
+                            ) {
+                                items(uiState.groups) { group ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                scope.launch {
+                                                    viewModel.loadGroupMembers(group.groupId)
+                                                        .onSuccess { saved ->
+                                                            val people = saved
+                                                                .filter { it.userId != currentUserId }
+                                                                .map { m ->
+                                                                    if (m.userId != null)
+                                                                        TempParticipant(m.userId, m.name, true, m.userId)
+                                                                    else
+                                                                        TempParticipant("n_${m.groupMemberId}", m.name, false)
+                                                                }
+                                                            onGroupSelected(group.name, people)
+                                                        }
+                                                }
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(group.name, fontWeight = FontWeight.SemiBold)
+                                                Text(
+                                                    "Created for you",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            IconButton(onClick = { viewModel.deleteGroup(group.groupId) }) {
+                                                Icon(Icons.Default.Close, "Delete", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ===== TAB 2: Create & Save New Group =====
+                    2 -> {
+                        Text("Create New Group", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = newGroupName,
+                            onValueChange = { newGroupName = it },
+                            label = { Text("Group Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("e.g., Roommates, Dinner Friends") }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text("Select Members to Include:", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        currentParticipants.forEach { member ->
+                            val selected = selectedMembersForGroup.contains(member.id)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedMembersForGroup =
+                                            if (selected) selectedMembersForGroup - member.id
+                                            else selectedMembersForGroup + member.id
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = selected,
+                                    onCheckedChange = {
+                                        selectedMembersForGroup =
+                                            if (it) selectedMembersForGroup + member.id
+                                            else selectedMembersForGroup - member.id
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(member.name)
+                                if (member.userId == currentUserId) {
+                                    Text(" (You)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                if (newGroupName.isNotBlank() && selectedMembersForGroup.any { it != "m_$currentUserId" }) {
+                                    val newGroup = ParticipantGroup(
+                                        groupId = UUID.randomUUID().toString(),
+                                        userId = currentUserId,
+                                        name = newGroupName
+                                    )
+                                    // You are the group owner, so only the other people are stored
+                                    val membersToSave = currentParticipants
+                                        .filter { it.id in selectedMembersForGroup && it.userId != currentUserId }
+                                        .map {
+                                            GroupMember(
+                                                groupMemberId = UUID.randomUUID().toString(),
+                                                groupId = newGroup.groupId,
+                                                userId = if (it.isUser) it.userId else null,
+                                                name = it.name
+                                            )
+                                        }
+                                    viewModel.createGroup(
+                                        group = newGroup,
+                                        members = membersToSave,
+                                        onSuccess = {
+                                            newGroupName = ""
+                                            selectedMembersForGroup = emptySet()
+                                            tabIndex = 1
+                                        }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = newGroupName.isNotBlank() && selectedMembersForGroup.any { it != "m_$currentUserId" }
+                        ) {
+                            Text("💾 Save Group")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                // Show the real error (e.g. a Supabase/RLS message) instead of failing silently
+                uiState.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Close")
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-        text = {
-            DatePicker(state = state)
         }
-    )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun WrapParticipantsChips(participants: List<TempParticipant>) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        participants.forEach { member ->
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (member.isUser)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    member.name,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    fontSize = 14.sp,
+                    color = if (member.isUser)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+    }
+}
+
+// ==========================================
+// EXPENSE ITEM CARD
+// ==========================================
+@SuppressLint("DefaultLocale")
+@Composable
+fun ExpenseItemCard(
+    itemState: ExpenseItemState,
+    participants: List<TempParticipant>,
+    onRemove: () -> Unit,
+    onUpdate: (ExpenseItemState) -> Unit
+) {
+    var showAssignDropdown by remember { mutableStateOf(false) }
+    val itemId = itemState.item.splitItemId
+
+    var amountText by remember(itemId) {
+        mutableStateOf(if (itemState.item.amount == 0.0) "" else itemState.item.amount.toString())
+    }
+    var quantityText by remember(itemId) { mutableStateOf(itemState.item.quantity.toString()) }
+
+    val assignees = itemState.assignedMemberIds
+    val itemTotal = itemState.item.amount * itemState.item.quantity
+
+    fun equalPercentages(ids: List<String>): Map<String, Double> =
+        if (ids.isEmpty()) emptyMap() else ids.associateWith { 100.0 / ids.size }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header: total + remove
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Item", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("RM %.2f".format(itemTotal), fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, "Remove item", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Editable description / amount / quantity
+            OutlinedTextField(
+                value = itemState.item.description,
+                onValueChange = { onUpdate(itemState.copy(item = itemState.item.copy(description = it))) },
+                label = { Text("Description") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { text ->
+                        if (text.matches(DECIMAL_REGEX)) {
+                            amountText = text
+                            onUpdate(itemState.copy(item = itemState.item.copy(amount = text.toDoubleOrNull() ?: 0.0)))
+                        }
+                    },
+                    label = { Text("Unit price") },
+                    prefix = { Text("RM ") },
+                    modifier = Modifier.weight(2f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                OutlinedTextField(
+                    value = quantityText,
+                    onValueChange = { text ->
+                        if (text.all { it.isDigit() } && text.length <= 3) {
+                            quantityText = text
+                            val q = text.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                            onUpdate(itemState.copy(item = itemState.item.copy(quantity = q)))
+                        }
+                    },
+                    label = { Text("Qty") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Assign to
+            Text(
+                "Assigned to",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Box {
+                OutlinedButton(
+                    onClick = { showAssignDropdown = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    val names = assignees.joinToString(", ") { id ->
+                        participants.find { it.id == id }?.name ?: "Unknown"
+                    }
+                    Text(names.ifEmpty { "Select people" })
+                }
+                DropdownMenu(
+                    expanded = showAssignDropdown,
+                    onDismissRequest = { showAssignDropdown = false }
+                ) {
+                    participants.forEach { p ->
+                        val selected = assignees.contains(p.id)
+                        DropdownMenuItem(
+                            text = { Text(if (selected) "✓ ${p.name}" else p.name) },
+                            onClick = {
+                                val newAssignees =
+                                    if (selected) assignees - p.id else assignees + p.id
+                                // Reset to an equal split whenever the assignees change
+                                onUpdate(
+                                    itemState.copy(
+                                        assignedMemberIds = newAssignees,
+                                        splitMode = "equal",
+                                        percentages = equalPercentages(newAssignees)
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (assignees.isEmpty()) return@Column
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Split mode toggle
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = itemState.splitMode == "equal",
+                    onClick = {
+                        onUpdate(
+                            itemState.copy(
+                                splitMode = "equal",
+                                percentages = equalPercentages(assignees)
+                            )
+                        )
+                    },
+                    label = { Text("Equal Split") }
+                )
+                FilterChip(
+                    selected = itemState.splitMode == "custom",
+                    onClick = {
+                        val pcts =
+                            if (assignees.all { itemState.percentages.containsKey(it) }) itemState.percentages
+                            else equalPercentages(assignees)
+                        onUpdate(itemState.copy(splitMode = "custom", percentages = pcts))
+                    },
+                    label = { Text("Custom %") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (itemState.splitMode == "equal") {
+                val equalPct = 100.0 / assignees.size
+                val share = itemTotal / assignees.size
+                assignees.forEach { memberId ->
+                    val member = participants.find { it.id == memberId }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(member?.name ?: "")
+                        Text(
+                            "%.1f%%  RM %.2f".format(equalPct, share),
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            } else {
+                val totalPct = assignees.sumOf { itemState.percentages[it] ?: 0.0 }
+
+                assignees.forEach { memberId ->
+                    val member = participants.find { it.id == memberId }
+                    val pctValue = itemState.percentages[memberId] ?: 0.0
+                    val amount = itemTotal * pctValue / 100.0
+                    // Keyed on id only so typing "5." isn't overwritten by "5.0"
+                    var textValue by remember(itemId, memberId) {
+                        mutableStateOf(String.format("%.1f", pctValue))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(member?.name ?: "", modifier = Modifier.weight(1f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = textValue,
+                                onValueChange = { newText ->
+                                    if (newText.matches(DECIMAL_REGEX)) {
+                                        textValue = newText
+                                        val newPct = newText.toDoubleOrNull() ?: 0.0
+                                        onUpdate(
+                                            itemState.copy(
+                                                percentages = itemState.percentages + (memberId to newPct)
+                                            )
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.width(100.dp),
+                                suffix = { Text("%") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(8.dp),
+                                textStyle = TextStyle(fontSize = 14.sp)
+                            )
+                            Text(
+                                "RM %.2f".format(amount),
+                                modifier = Modifier.width(80.dp),
+                                textAlign = TextAlign.End,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                val ok = totalPct in 99.9..100.1
+                Text(
+                    "Total: %.1f%%".format(totalPct),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (ok) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                )
+                if (!ok) {
+                    Text(
+                        "⚠️ Total should equal 100%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// PREVIEW (the full screen needs a ViewModel, so preview the pieces)
+// ==========================================
+@Preview(showBackground = true, name = "Participants chips")
+@Composable
+fun ParticipantsChipsPreview() {
+    MiniProjectTheme {
+        WrapParticipantsChips(
+            listOf(
+                TempParticipant("m_1", "You", true, "1"),
+                TempParticipant("n_1", "Aisyah", false)
+            )
+        )
+    }
 }

@@ -48,6 +48,8 @@ dependencies {
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.play.services.basement)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
     implementation("androidx.compose.material:material-icons-core")

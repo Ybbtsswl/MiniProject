@@ -9,6 +9,6 @@ data class SplitItem(
     @SerialName("split_bill_id") val splitBillId: String = "",
     val description: String = "",
     val amount: Double = 0.0,
-    @SerialName("payer_id") val payerId: String? = null
+    @SerialName("payer_id") val payerId: String? = null,
+    val quantity: Int = 1
 )
-

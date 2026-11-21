@@ -1,15 +1,18 @@
 package com.example.miniproject.repository
 
-import android.annotation.SuppressLint
 import com.example.miniproject.SupabaseClient
 import com.example.miniproject.data.Category
 import com.example.miniproject.data.Expense
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Objects.isNull
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 class ExpenseRepository {
     private val supabase = SupabaseClient.instance
@@ -30,11 +33,33 @@ class ExpenseRepository {
             }
         }
 
+    // Picks the category used for expenses created from a split bill:
+    // a category whose name contains "split", else "other", else the first one.
+    // Returns (categoryId, categoryName), or null if none could be read.
+    // Reads raw JSON so it doesn't depend on the Category class's field names;
+    // it expects the columns "category_id" (or "id") and "name".
+    private suspend fun getSplitCategory(): Pair<String, String>? =
+        withContext(Dispatchers.IO) {
+            try {
+                fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
 
+                val all = supabase.from(categoryTable)
+                    .select()
+                    .decodeList<JsonObject>()
+                    .mapNotNull { row ->
+                        val id = row.str("category_id") ?: row.str("id")
+                        val name = row.str("name")
+                        if (id != null && name != null) id to name else null
+                    }
 
-
-
-
+                all.firstOrNull { it.second.contains("split", ignoreCase = true) }
+                    ?: all.firstOrNull { it.second.contains("other", ignoreCase = true) }
+                    ?: all.firstOrNull()
+            } catch (e: Exception) {
+                android.util.Log.e("ExpenseRepo", "getSplitCategory failed", e)
+                null
+            }
+        }
 
     // ─── EXPENSES ──────────────────────────────────────────────
 
@@ -50,6 +75,29 @@ class ExpenseRepository {
                 Result.failure(e)
             }
         }
+
+    // CREATE — Expense generated from a split bill (your share only)
+    suspend fun addSplitBillExpense(
+        userId: String,
+        billId: String,
+        title: String,
+        date: String,
+        amount: Double
+    ): Result<Expense> {
+        val category = getSplitCategory()
+        return addExpense(
+            Expense(
+                userId = userId,
+                categoryId = category?.first ?: "",
+                amount = amount,
+                category = category?.second ?: "Split Bill",
+                date = date,
+                description = title,
+                isFromSplit = true,
+                splitBillId = billId
+            )
+        )
+    }
 
     // READ ALL — Get all expenses for a user
     suspend fun getExpenses(userId: String): Result<List<Expense>> =
@@ -130,7 +178,7 @@ class ExpenseRepository {
         }
 
     // DELETE — Remove expense
-    suspend fun deleteExpense(expenseId: String): Result<Unit> =
+    suspend fun deleteExpense(expenseId: String, string: String?): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 supabase.from(expenseTable)
@@ -149,10 +197,10 @@ class ExpenseRepository {
             try {
                 supabase.from(expenseTable)
                     .update(
-                        mapOf(
-                            "split_bill_id" to null,
-                            "is_from_split" to false
-                        )
+                        buildJsonObject {
+                            put("split_bill_id", JsonNull)
+                            put("is_from_split", false)
+                        }
                     ) {
                         filter { eq("split_bill_id", splitBillId) }
                     }

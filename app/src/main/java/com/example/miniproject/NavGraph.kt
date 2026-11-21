@@ -26,11 +26,8 @@ import com.example.miniproject.screen.onboarding.OnboardingRoute
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
 
 sealed class Screen(val route: String) {
     object Startup : Screen("startup")
@@ -62,6 +59,11 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     startDestination: String = Screen.Startup.route
 ) {
+    // ONE ViewModel shared by the list, create and detail screens.
+    // Calling viewModel() inside each composable() gives every destination its own
+    // instance, so the detail screen never saw the bills the list had loaded.
+    val splitBillViewModel: SplitBillViewModel = viewModel()
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -167,7 +169,8 @@ fun AppNavHost(
         composable(Screen.Budget.route) {
             BudgetScreen(
                 userId = supabaseClient.auth.currentUserOrNull()?.id,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onManageExpenses = { navController.navigate(Screen.Expense.route) }
             )
         }
 
@@ -187,66 +190,20 @@ fun AppNavHost(
 
         composable(
             route = Screen.AddSplitBill.route,
-            arguments = listOf(
-                navArgument("userId") { type = NavType.StringType }
-            )
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId")!!
-            val splitBillViewModel: SplitBillViewModel = viewModel()
-            val scope = rememberCoroutineScope()
 
             AddSplitBillScreen(
                 userId = userId,
                 viewModel = splitBillViewModel,
                 onBack = { navController.popBackStack() },
-                onCreateSplit = { bill, members, items, allocations ->
-                    splitBillViewModel.createSplitBill(
-                        bill = bill,
-                        members = members,
-                        items = items,
-                        allocations = allocations,
-                        onSuccess = { navController.popBackStack() },
-                        onError = { /* handle error */ }
-                    )
-                },
-                onSaveGroup = { group ->
-                    kotlinx.coroutines.runBlocking {
-                        splitBillViewModel.createGroup(group)
-                    }
-                },
-
-                onLoadGroup = { groupId ->
-                    kotlinx.coroutines.runBlocking {
-                        splitBillViewModel.loadGroupMembers(groupId)
-                    }
-                },
-
-                onLookupUser = { lookupUserId ->
-                    try {
-                        val userJson = supabaseClient.postgrest["profiles"]
-                            .select { filter { eq("id", lookupUserId) }; limit(1) }
-                            .decodeSingleOrNull<kotlinx.serialization.json.JsonObject>()
-
-                        if (userJson != null) {
-                            val name = userJson["username"]?.toString()
-                                ?.removeSurrounding("\"")
-                                ?: userJson["name"]?.toString()
-                                    ?.removeSurrounding("\"")
-                            if (!name.isNullOrEmpty()) {
-                                Result.success(name)
-                            } else {
-                                Result.failure(Exception("Name not found"))
-                            }
-                        } else {
-                            Result.failure(Exception("User not found"))
-                        }
-                    } catch (e: Exception) {
-                        Result.failure(e)
-                    }
+                onSuccess = {
+                    splitBillViewModel.loadBills(userId)   // so the new bill shows in the list
+                    navController.popBackStack()
                 }
             )
         }
-
 
         composable(
             route = Screen.SplitBill.route,
@@ -255,13 +212,10 @@ fun AppNavHost(
             )
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId")!!
-            val splitBillViewModel: SplitBillViewModel = viewModel()
 
             LaunchedEffect(userId) {
                 splitBillViewModel.loadGroups(userId)
             }
-
-            val groupsState by splitBillViewModel.uiState.collectAsState()
 
             SplitBillScreen(
                 userId = userId,
@@ -284,19 +238,24 @@ fun AppNavHost(
         ) { backStackEntry ->
             val billId = backStackEntry.arguments?.getString("billId")!!
             val userId = supabaseClient.auth.currentUserOrNull()?.id
-            val splitBillViewModel: SplitBillViewModel = viewModel()
             val scope = rememberCoroutineScope()
+            val uiState by splitBillViewModel.uiState.collectAsState()
 
             var detailData by remember { mutableStateOf<SplitBillViewModel.BillDetailData?>(null) }
             var isLoading by remember { mutableStateOf(true) }
+            var loadError by remember { mutableStateOf<String?>(null) }
 
-            LaunchedEffect(billId) {
+            fun reload(refreshList: Boolean) {
                 scope.launch {
-                    val result = splitBillViewModel.loadBillDetail(billId)
-                    detailData = result.getOrNull()
+                    splitBillViewModel.loadBillDetail(billId)
+                        .onSuccess { detailData = it; loadError = null }
+                        .onFailure { loadError = it.message ?: "Failed to load bill" }
                     isLoading = false
+                    if (refreshList && userId != null) splitBillViewModel.loadBills(userId)
                 }
             }
+
+            LaunchedEffect(billId) { reload(refreshList = false) }
 
             when {
                 isLoading -> {
@@ -312,38 +271,23 @@ fun AppNavHost(
                         items = data.items,
                         allocations = data.allocations,
                         currentUserId = userId ?: "",
+                        errorMessage = uiState.error,
                         onBack = { navController.popBackStack() },
-                        onSettleAllocation = { allocationId ->
-                            scope.launch {
-                                if (userId != null) {
-                                    splitBillViewModel.settleAllocation(
-                                        splitAllocationId = allocationId,
-                                        billId = billId,
-                                        userId = userId,
-                                        selectedMonth = java.time.LocalDate.now()
-                                    )
-                                    // Refresh data
-                                    detailData = splitBillViewModel.loadBillDetail(billId).getOrNull()
-                                }
+                        onSettleMember = { memberId ->
+                            splitBillViewModel.settleMember(billId, memberId) {
+                                reload(refreshList = true)
                             }
                         },
                         onSettleBill = {
-                            scope.launch {
-                                if (userId != null) {
-                                    splitBillViewModel.settleBill(
-                                        billId = billId,
-                                        userId = userId,
-                                        selectedMonth = java.time.LocalDate.now()
-                                    )
-                                    navController.popBackStack()
-                                }
+                            splitBillViewModel.settleWholeBill(billId) {
+                                reload(refreshList = true)
                             }
                         }
                     )
                 }
                 else -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.Text("Bill not found")
+                        androidx.compose.material3.Text(loadError ?: "Bill not found")
                     }
                 }
             }
