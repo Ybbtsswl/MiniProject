@@ -36,11 +36,13 @@ sealed class Screen(val route: String) {
         fun createRoute(isRegister: Boolean) = "auth/$isRegister"
     }
     object Dashboard : Screen("dashboard")
+    object Income : Screen("income")
     object Expense : Screen("expense")
     object AllExpenses : Screen("all_expenses")
     object Budget : Screen("budget")
-    object AddTransaction : Screen("add_transaction/{userId}") {
-        fun createRoute(userId: String) = "add_transaction/$userId"
+    object AddTransaction : Screen("add_transaction/{userId}?income={income}") {
+        fun createRoute(userId: String, income: Boolean = false) =
+            "add_transaction/$userId?income=$income"
     }
     object SplitBill : Screen("split_bill/{userId}") {
         fun createRoute(userId: String) = "split_bill/$userId"
@@ -135,6 +137,9 @@ fun AppNavHost(
                 onAdd = {
                     userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
                 },
+                onAddIncome = {
+                    navController.navigate(Screen.Income.route)
+                },
                 onExpense = {
                     navController.navigate(Screen.Expense.route)
                 },
@@ -171,6 +176,19 @@ fun AppNavHost(
             )
         }
 
+        composable(Screen.Income.route) {
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
+            if (userId != null) {
+                IncomeScreen(
+                    userId = userId,
+                    onBack = { navController.popBackStack() },
+                    onAddIncome = {
+                        navController.navigate(Screen.AddTransaction.createRoute(userId, income = true))
+                    }
+                )
+            }
+        }
+
         composable(Screen.AllExpenses.route) {
             AllExpensesScreen(
                 userId = supabaseClient.auth.currentUserOrNull()?.id,
@@ -189,14 +207,19 @@ fun AppNavHost(
         composable(
             route = Screen.AddTransaction.route,
             arguments = listOf(
-                navArgument("userId") { type = NavType.StringType }
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("income") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
             )
         ) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId")!!
             AddTransactionScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
+                onSaveSuccess = { navController.popBackStack() },
+                initialIsExpense = backStackEntry.arguments?.getBoolean("income") != true
             )
         }
 

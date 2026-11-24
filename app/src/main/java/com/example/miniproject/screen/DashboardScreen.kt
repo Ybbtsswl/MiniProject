@@ -25,8 +25,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.miniproject.data.Expense
+import com.example.miniproject.data.Income
 import com.example.miniproject.repository.ExpenseRepository
+import com.example.miniproject.repository.IncomeRepository
 import com.example.miniproject.ui.theme.MoneeAmber
 import com.example.miniproject.ui.theme.MoneeBorder
 import com.example.miniproject.ui.theme.MoneeButtonBrush
@@ -48,6 +53,7 @@ private val CardColor = Color.White
 fun DashboardScreen(
     userId: String? = null,
     onAdd: () -> Unit = {},
+    onAddIncome: () -> Unit = {},
     onExpense: () -> Unit = {},
     onSplitBill: () -> Unit = {},
     onAddSplitBill: () -> Unit = {},
@@ -56,13 +62,23 @@ fun DashboardScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
+    var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
     val repository = remember { ExpenseRepository() }
+    val incomeRepository = remember { IncomeRepository() }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(userId) {
-        expenses = if (userId == null) {
-            emptyList()
-        } else {
-            repository.getExpenses(userId).getOrDefault(emptyList())
+    LaunchedEffect(userId, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            expenses = if (userId == null) {
+                emptyList()
+            } else {
+                repository.getExpenses(userId).getOrDefault(emptyList())
+            }
+            incomes = if (userId == null) {
+                emptyList()
+            } else {
+                incomeRepository.getIncome(userId).getOrDefault(emptyList())
+            }
         }
     }
 
@@ -90,6 +106,8 @@ fun DashboardScreen(
                 when (selectedTab) {
                     0 -> DashboardContent(
                         expenses = expenses,
+                        incomes = incomes,
+                        onAddIncome = onAddIncome,
                         onExpense = onExpense,
                         onSplitBill = onSplitBill,
                         onBudget = onBudget
@@ -112,6 +130,8 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     expenses: List<Expense>,
+    incomes: List<Income>,
+    onAddIncome: () -> Unit,
     onExpense: () -> Unit,
     onSplitBill: () -> Unit,
     onBudget: () -> Unit
@@ -120,7 +140,9 @@ private fun DashboardContent(
     val monthlyExpenses = expenses
         .filter { it.date.startsWith(currentMonth) }
         .sumOf { it.amount }
-    val income = 0.0
+    val income = incomes
+        .filter { it.incomeDate.startsWith(currentMonth) }
+        .sumOf { it.amount }
     val balance = income - monthlyExpenses
 
     Column(
@@ -142,7 +164,12 @@ private fun DashboardContent(
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(12.dp))
-        QuickActionGrid(onExpense = onExpense, onSplitBill = onSplitBill, onBudget = onBudget)
+        QuickActionGrid(
+            onIncome = onAddIncome,
+            onExpense = onExpense,
+            onSplitBill = onSplitBill,
+            onBudget = onBudget
+        )
         Spacer(modifier = Modifier.height(12.dp))
     }
 }
@@ -325,13 +352,14 @@ private fun formatCurrency(amount: Double): String {
 
 @Composable
 private fun QuickActionGrid(
+    onIncome: () -> Unit,
     onExpense: () -> Unit,
     onSplitBill: () -> Unit,
     onBudget: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickAction("✓", "Income", Modifier.weight(1f)) {}
+            QuickAction("✓", "Income", Modifier.weight(1f), onClick = onIncome)
             QuickAction("📄", "Expenses", Modifier.weight(1f), onClick = onExpense)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

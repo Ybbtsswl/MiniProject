@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.data.Expense
+import com.example.miniproject.data.Income
+import com.example.miniproject.repository.IncomeRepository
 import com.example.miniproject.receipt.ReceiptData
 import com.example.miniproject.receipt.ReceiptScanButton
 import com.example.miniproject.ui.theme.MiniProjectTheme
@@ -50,8 +52,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
-private val incomeCategories = listOf("Salary", "Invest", "Gift", "Customize +")
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,9 +60,10 @@ fun AddTransactionScreen(
     userId: String? = null,
     onBack: () -> Unit = {},
     onSaveSuccess: () -> Unit = {},
+    initialIsExpense: Boolean = true,
     viewModel: ExpenseViewModel = viewModel()
 ) {
-    var isExpense by remember { mutableStateOf(true) }
+    var isExpense by remember { mutableStateOf(initialIsExpense) }
     var amount by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
     var description by remember { mutableStateOf("") }
@@ -74,6 +76,8 @@ fun AddTransactionScreen(
     var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
     var scanError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val incomeRepository = remember { IncomeRepository() }
+    val saveScope = rememberCoroutineScope()
 
     // Load categories from ViewModel
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -277,13 +281,17 @@ fun AddTransactionScreen(
                         }
                     }
                 }
+            } else if (isLoadingCategories) {
+                Text(text = "Loading categories...", fontSize = 13.sp, color = MoneeMuted)
+            } else if (categories.isEmpty()) {
+                Text(text = "No categories found", fontSize = 13.sp, color = MoneeMuted)
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(incomeCategories) { name ->
-                        IncomeCategoryChip(
-                            label = name,
-                            selected = selectedCategoryId == name,
-                            onClick = { selectedCategoryId = name }
+                    items(categories) { cat ->
+                        CategoryChip(
+                            category = cat,
+                            selected = selectedCategoryId == cat.categoryId,
+                            onClick = { selectedCategoryId = cat.categoryId }
                         )
                     }
                 }
@@ -409,7 +417,7 @@ fun AddTransactionScreen(
                     val value = amount.toDoubleOrNull()
                     when {
                         value == null || value <= 0.0 -> error = "Enter a valid amount"
-                        selectedCategoryId == null && isExpense -> error = "Pick a category"
+                        selectedCategoryId == null -> error = "Pick a category"
                         userId == null -> error = "User not logged in"
                         else -> {
                             error = null
@@ -443,7 +451,23 @@ fun AddTransactionScreen(
                                     }
                                 }
                             } else {
-                                onSaveSuccess()
+                                val newIncome = Income(
+                                    userId = userId,
+                                    amount = value,
+                                    categoryId = selectedCategoryId,
+                                    incomeDate = formattedDate,
+                                    description = description.trim().ifEmpty { "" }
+                                )
+                                saveScope.launch {
+                                    incomeRepository.addIncome(newIncome)
+                                        .onSuccess {
+                                            Toast.makeText(context, "Income saved", Toast.LENGTH_SHORT).show()
+                                            onSaveSuccess()
+                                        }
+                                        .onFailure {
+                                            error = it.message ?: "Failed to save income"
+                                        }
+                                }
                             }
                         }
                     }
