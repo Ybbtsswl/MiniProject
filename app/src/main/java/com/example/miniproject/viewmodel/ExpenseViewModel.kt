@@ -9,13 +9,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 data class ExpenseUiState(
     val expenses: List<Expense> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val totalExpense: Double = 0.0,
-    val selectedExpense: Expense? = null
+    val selectedExpense: Expense? = null,
+    val previousMonthTotal: Double? = null   // last month's total (null until loaded)
 )
 
 class ExpenseViewModel : ViewModel() {
@@ -67,7 +69,24 @@ class ExpenseViewModel : ViewModel() {
     fun loadExpensesByMonth(userId: String, month: String) {
         currentUserId = userId
         currentMonth = month
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null, previousMonthTotal = null)
+
+        // Last month's total, for the "x% less / more than last month" line
+        viewModelScope.launch {
+            val previous = try {
+                YearMonth.parse(month).minusMonths(1).toString()   // "2026-11" -> "2026-10"
+            } catch (e: Exception) {
+                null
+            }
+            if (previous != null) {
+                repository.getExpensesByMonth(userId, previous).onSuccess { list ->
+                    if (currentMonth == month) {
+                        _uiState.value = _uiState.value.copy(previousMonthTotal = list.sumOf { it.amount })
+                    }
+                }
+            }
+        }
+
         viewModelScope.launch {
             repository.getExpensesByMonth(userId, month)
                 .onSuccess { list ->

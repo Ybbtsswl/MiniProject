@@ -58,6 +58,7 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 fun ExpenseScreen(
@@ -95,7 +96,6 @@ fun ExpenseScreen(
         selectedMonth
     }
     val monthlyTotal = expenses.sumOf { it.amount }
-    val monthChange = -12.4
 
     // Status bar + camera cut-out (top) and the sides, so the header is never covered
     val topInsets = WindowInsets.systemBars
@@ -194,16 +194,27 @@ fun ExpenseScreen(
                         color = MoneeInk,
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Text(text = "↓ ", fontSize = 12.sp, color = MoneeGreen)
-                        Text(
-                            text = "${monthChange * -1}% less than last month",
-                            fontSize = 12.sp,
-                            color = MoneeGreen
-                        )
+                    // Compared with last month's real total (hidden until it has loaded)
+                    val previousTotal = uiState.previousMonthTotal
+                    if (previousTotal != null) {
+                        val change = if (previousTotal > 0.0) (monthlyTotal - previousTotal) / previousTotal * 100 else 0.0
+                        val pct = String.format(Locale.US, "%.1f", abs(change))
+                        val arrow: String
+                        val message: String
+                        val tone: Color
+                        when {
+                            previousTotal <= 0.0 -> { arrow = ""; message = "No expenses last month"; tone = MoneeMuted }
+                            change < -0.05 -> { arrow = "↓ "; message = "$pct% less than last month"; tone = MoneeGreen }
+                            change > 0.05 -> { arrow = "↑ "; message = "$pct% more than last month"; tone = MoneeRed }
+                            else -> { arrow = ""; message = "Same as last month"; tone = MoneeMuted }
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text(text = arrow, fontSize = 12.sp, color = tone)
+                            Text(text = message, fontSize = 12.sp, color = tone)
+                        }
                     }
                 }
             }
