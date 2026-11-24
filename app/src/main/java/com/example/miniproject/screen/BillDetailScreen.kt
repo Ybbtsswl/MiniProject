@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -74,6 +76,16 @@ fun SplitBillDetailScreen(
     onSettleMember: (String) -> Unit = {},   // memberId -> marks all of their shares paid
     onSettleBill: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val markPaid: (String) -> Unit = { id ->
+        onSettleMember(id)
+        Toast.makeText(context, "Marked as paid", Toast.LENGTH_SHORT).show()
+    }
+    val settleBill: () -> Unit = {
+        onSettleBill()
+        Toast.makeText(context, "Bill marked as settled", Toast.LENGTH_SHORT).show()
+    }
+
     // The creator is the payer: they are saved as payerId on every item
     val payerMemberId = items.firstNotNullOfOrNull { it.payerId }
     val payer = members.find { it.splitMemberId == payerMemberId } ?: members.firstOrNull()
@@ -162,7 +174,7 @@ fun SplitBillDetailScreen(
                         currentMemberId = currentMemberId,
                         payerMemberId = payer?.splitMemberId,
                         canMarkOthersPaid = isPayer && !isBillSettled,
-                        onMarkPaid = onSettleMember
+                        onMarkPaid = markPaid
                     )
                 }
 
@@ -175,8 +187,8 @@ fun SplitBillDetailScreen(
                         myShare = myShare,
                         isSettled = isSettled,
                         pendingOthers = pendingOthers,
-                        onPay = { currentMemberId?.let(onSettleMember) },
-                        onSettleBill = onSettleBill
+                        onPay = { currentMemberId?.let(markPaid) },
+                        onSettleBill = settleBill
                     )
                 }
 

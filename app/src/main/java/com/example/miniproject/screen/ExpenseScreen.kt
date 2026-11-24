@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,6 +74,7 @@ fun ExpenseScreen(
     var selectedMonth by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))) }
     var selectedExpense by remember { mutableStateOf<Expense?>(null) }
     var editingExpense by remember { mutableStateOf<Expense?>(null) }
+    val context = LocalContext.current
 
     LaunchedEffect(userId) {
         userId?.let {
@@ -404,6 +407,7 @@ fun ExpenseScreen(
                 expense.expenseId.let { id ->
                     viewModel.deleteExpense(id) { success, _, _ ->
                         if (success) {
+                            Toast.makeText(context, "Expense deleted", Toast.LENGTH_SHORT).show()
                             userId?.let { viewModel.loadExpensesByMonth(it, selectedMonth) }
                         }
                     }
@@ -421,6 +425,7 @@ fun ExpenseScreen(
                 editingExpense = null
                 viewModel.updateExpense(updatedExpense) { success, _ ->
                     if (success) {
+                        Toast.makeText(context, "Expense updated", Toast.LENGTH_SHORT).show()
                         userId?.let { viewModel.loadExpensesByMonth(it, selectedMonth) }
                     }
                 }

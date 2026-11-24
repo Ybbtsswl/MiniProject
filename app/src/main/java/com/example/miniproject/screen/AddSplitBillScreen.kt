@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import android.annotation.SuppressLint
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -97,6 +99,10 @@ fun AddSplitBillScreen(
     var billTitle by remember { mutableStateOf("") }
     var selectedGroup by remember { mutableStateOf("") }
     var showManageDialog by remember { mutableStateOf(false) }
+    var dialogTab by remember { mutableIntStateOf(0) }
+    var groupMenuOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var participants by remember {
         mutableStateOf(
             listOf(TempParticipant(id = "m_$userId", name = "You", isUser = true, userId = userId))
@@ -144,6 +150,33 @@ fun AddSplitBillScreen(
         serviceChargePercent = pctText(r.serviceChargePercent ?: 0.0)
 
         scanNotes = r.warnings + "Assign each item to the people who shared it, then check the amounts."
+        Toast.makeText(context, "Receipt scanned. Please review the details", Toast.LENGTH_SHORT).show()
+    }
+
+    // Pick a saved group from the dropdown: you + that group's members become the participants
+    fun selectGroup(groupId: String, groupName: String) {
+        scope.launch {
+            viewModel.loadGroupMembers(groupId).onSuccess { saved ->
+                val people = saved
+                    .filter { it.userId != userId }
+                    .map { m ->
+                        if (m.userId != null) TempParticipant(m.userId, m.name, true, m.userId)
+                        else TempParticipant("n_${m.groupMemberId}", m.name, false)
+                    }
+                val me = participants.first { it.id == "m_$userId" }
+                participants = listOf(me) + people
+                val keep = participants.map { it.id }.toSet()
+                // people who left the list can't keep their item assignments
+                expenseItems = expenseItems.map { st ->
+                    st.copy(
+                        assignedMemberIds = st.assignedMemberIds.filter { it in keep },
+                        percentages = st.percentages.filterKeys { it in keep }
+                    )
+                }
+                selectedGroup = groupName
+                Toast.makeText(context, "Group selected", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // Totals
@@ -227,7 +260,10 @@ fun AddSplitBillScreen(
             members = members,
             items = items,
             allocations = allocations,
-            onSuccess = { onSuccess() },
+            onSuccess = {
+                Toast.makeText(context, "Split bill created", Toast.LENGTH_SHORT).show()
+                onSuccess()
+            },
             onError = { }
         )
     }
@@ -311,15 +347,76 @@ fun AddSplitBillScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Participants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            TextButton(onClick = { showManageDialog = true }) {
+                            TextButton(onClick = { dialogTab = 0; showManageDialog = true }) {
                                 Text("Manage", color = MoneeAmber, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
-                        if (selectedGroup.isNotEmpty()) {
-                            Text("Using group: $selectedGroup", style = MaterialTheme.typography.bodySmall, color = MoneeAmber)
-                            Spacer(modifier = Modifier.height(4.dp))
+                        // Saved groups: pick one from the dropdown
+                        Box {
+                            OutlinedButton(
+                                onClick = { groupMenuOpen = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MoneeBorder),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MoneeInk)
+                            ) {
+                                Text(if (selectedGroup.isNotEmpty()) "Group: $selectedGroup" else "Select a saved group")
+                            }
+                            DropdownMenu(
+                                expanded = groupMenuOpen,
+                                onDismissRequest = { groupMenuOpen = false },
+                                containerColor = MoneeCream
+                            ) {
+                                when {
+                                    uiState.isLoadingGroups -> DropdownMenuItem(
+                                        text = { Text("Loading groups...", color = MoneeMuted) },
+                                        onClick = {},
+                                        enabled = false
+                                    )
+                                    uiState.groups.isEmpty() -> DropdownMenuItem(
+                                        text = { Text("No saved groups yet", color = MoneeMuted) },
+                                        onClick = {},
+                                        enabled = false
+                                    )
+                                    else -> uiState.groups.forEach { group ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    group.name,
+                                                    fontWeight = if (group.name == selectedGroup) FontWeight.SemiBold else FontWeight.Normal
+                                                )
+                                            },
+                                            trailingIcon = {
+                                                IconButton(
+                                                    onClick = {
+                                                        viewModel.deleteGroup(group.groupId)
+                                                        Toast.makeText(context, "Group deleted", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Close, "Delete group", tint = MoneeMuted, modifier = Modifier.size(16.dp))
+                                                }
+                                            },
+                                            onClick = {
+                                                groupMenuOpen = false
+                                                selectGroup(group.groupId, group.name)
+                                            }
+                                        )
+                                    }
+                                }
+                                HorizontalDivider(color = MoneeBorder)
+                                DropdownMenuItem(
+                                    text = { Text("+ Create new group", color = MoneeAmber, fontWeight = FontWeight.SemiBold) },
+                                    onClick = {
+                                        groupMenuOpen = false
+                                        dialogTab = 1
+                                        showManageDialog = true
+                                    }
+                                )
+                            }
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         WrapParticipantsChips(participants = participants)
                     }
@@ -464,20 +561,24 @@ fun AddSplitBillScreen(
             viewModel = viewModel,
             currentUserId = userId,
             currentParticipants = participants,
+            initialTab = dialogTab,
             onDismiss = { showManageDialog = false },
             onAddUser = { user ->
                 if (participants.none { it.id == user.id || it.userId == user.id }) {
                     participants = participants + TempParticipant(id = user.id, name = user.name, isUser = true, userId = user.id)
+                    Toast.makeText(context, "${user.name} added", Toast.LENGTH_SHORT).show()
                 }
                 showManageDialog = false
             },
             onAddNonUser = { name ->
                 participants = participants + TempParticipant(id = "n_${System.currentTimeMillis()}", name = name, isUser = false)
+                Toast.makeText(context, "$name added", Toast.LENGTH_SHORT).show()
                 showManageDialog = false
             },
             onRemoveParticipant = { id ->
                 if (id != "m_$userId") {
                     participants = participants.filterNot { it.id == id }
+                    Toast.makeText(context, "Participant removed", Toast.LENGTH_SHORT).show()
                     // drop removed person from item assignments
                     expenseItems = expenseItems.map { st ->
                         st.copy(
@@ -486,11 +587,6 @@ fun AddSplitBillScreen(
                         )
                     }
                 }
-            },
-            onGroupSelected = { groupName, members ->
-                selectedGroup = groupName
-                participants = (participants + members).distinctBy { it.id }
-                showManageDialog = false
             }
         )
     }
@@ -508,15 +604,15 @@ fun ManageGroupDialog(
     onAddUser: (UserResult) -> Unit,
     onAddNonUser: (String) -> Unit,
     onRemoveParticipant: (String) -> Unit,
-    onGroupSelected: (String, List<TempParticipant>) -> Unit
+    initialTab: Int = 0
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var tabIndex by remember { mutableIntStateOf(0) }
+    var tabIndex by remember { mutableIntStateOf(initialTab) }
     var searchUserId by remember { mutableStateOf("") }
     var newGroupName by remember { mutableStateOf("") }
     var selectedMembersForGroup by remember { mutableStateOf(setOf<String>()) }
     var nonUserName by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -553,11 +649,6 @@ fun ManageGroupDialog(
                     )
                     Tab(
                         selected = tabIndex == 1, onClick = { tabIndex = 1 },
-                        selectedContentColor = MoneeInk, unselectedContentColor = MoneeMuted,
-                        text = { Text("My Groups") }
-                    )
-                    Tab(
-                        selected = tabIndex == 2, onClick = { tabIndex = 2 },
                         selectedContentColor = MoneeInk, unselectedContentColor = MoneeMuted,
                         text = { Text("Create Group") }
                     )
@@ -603,7 +694,7 @@ fun ManageGroupDialog(
                                 border = BorderStroke(1.dp, MoneeBorder)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("✅ User Found!", fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                                    Text("User Found!", fontWeight = FontWeight.SemiBold, color = MoneeInk)
                                     Text("Name: ${user.name}", color = MoneeInk)
                                     Text("ID: ${user.id}", color = MoneeInk)
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -682,80 +773,8 @@ fun ManageGroupDialog(
                         }
                     }
 
-                    // ===== TAB 1: Load Saved Groups =====
+                    // ===== TAB 1: Create & Save New Group =====
                     1 -> {
-                        Text("Your Saved Groups", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        if (uiState.isLoadingGroups) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) { CircularProgressIndicator(color = MoneeYellow) }
-                        } else if (uiState.groups.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "No saved groups yet.\nCreate one in the 'Create Group' tab!",
-                                    color = MoneeMuted,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.heightIn(max = 300.dp)
-                            ) {
-                                items(uiState.groups) { group ->
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                scope.launch {
-                                                    viewModel.loadGroupMembers(group.groupId)
-                                                        .onSuccess { saved ->
-                                                            val people = saved
-                                                                .filter { it.userId != currentUserId }
-                                                                .map { m ->
-                                                                    if (m.userId != null)
-                                                                        TempParticipant(m.userId, m.name, true, m.userId)
-                                                                    else
-                                                                        TempParticipant("n_${m.groupMemberId}", m.name, false)
-                                                                }
-                                                            onGroupSelected(group.name, people)
-                                                        }
-                                                }
-                                            },
-                                        colors = moneeCardColors(),
-                                        border = BorderStroke(1.dp, MoneeBorder)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text(group.name, fontWeight = FontWeight.SemiBold, color = MoneeInk)
-                                                Text(
-                                                    "Created for you",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MoneeMuted
-                                                )
-                                            }
-                                            IconButton(onClick = { viewModel.deleteGroup(group.groupId) }) {
-                                                Icon(Icons.Default.Close, "Delete", tint = MaterialTheme.colorScheme.error)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // ===== TAB 2: Create & Save New Group =====
-                    2 -> {
                         Text("Create New Group", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -832,9 +851,10 @@ fun ManageGroupDialog(
                                         group = newGroup,
                                         members = membersToSave,
                                         onSuccess = {
+                                            Toast.makeText(context, "Group saved", Toast.LENGTH_SHORT).show()
                                             newGroupName = ""
                                             selectedMembersForGroup = emptySet()
-                                            tabIndex = 1
+                                            onDismiss()   // the new group now shows in the dropdown
                                         }
                                     )
                                 }

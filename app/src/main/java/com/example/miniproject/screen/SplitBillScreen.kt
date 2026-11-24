@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -81,6 +83,7 @@ fun SplitBillScreen(
     onSeeAllClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var currentMonth by remember { mutableStateOf(LocalDate.now()) }
     val monthDisplay = remember(currentMonth) {
@@ -305,6 +308,7 @@ fun SplitBillScreen(
                 TextButton(
                     onClick = {
                         viewModel.deleteBill(bill.splitBillId, userId, currentMonth)
+                        Toast.makeText(context, "Split bill deleted", Toast.LENGTH_SHORT).show()
                         billToDelete = null
                     }
                 ) {

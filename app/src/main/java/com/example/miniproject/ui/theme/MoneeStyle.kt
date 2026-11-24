@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -144,3 +147,40 @@ fun moneeTopInsets(): WindowInsets =
     WindowInsets.systemBars
         .union(WindowInsets.displayCutout)
         .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+// ---------- flat style used by Split Bill / Add Transaction ----------
+val MoneePageBg = Color(0xFFF5F7FC)
+val MoneeFieldBg = Color(0xFFEBF0FA)
+
+fun Modifier.moneeFlatBackground(): Modifier = background(MoneePageBg)
+
+/** White rounded card that holds one section of a form. */
+@Composable
+fun MoneeSectionCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White)
+            .padding(16.dp),
+        content = content
+    )
+}
+
+/** Borderless, light-blue filled text field (yellow outline when focused). */
+@Composable
+fun moneeFilledFieldColors(container: Color = MoneeFieldBg) = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = container,
+    unfocusedContainerColor = container,
+    focusedBorderColor = MoneeYellow,
+    unfocusedBorderColor = Color.Transparent,
+    focusedLabelColor = MoneeAmber,
+    unfocusedLabelColor = MoneeMuted,
+    cursorColor = MoneeAmber,
+    focusedTextColor = MoneeInk,
+    unfocusedTextColor = MoneeInk,
+    focusedPlaceholderColor = MoneeMuted.copy(alpha = 0.6f),
+    unfocusedPlaceholderColor = MoneeMuted.copy(alpha = 0.6f)
+)

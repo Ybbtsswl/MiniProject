@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -71,6 +73,7 @@ fun AddTransactionScreen(
     var repeatIncome by remember { mutableStateOf(false) }
     var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
     var scanError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     // Load categories from ViewModel
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -104,6 +107,7 @@ fun AddTransactionScreen(
         }
 
         scanNotes = r.warnings + "Check the amount and date, then pick a category before saving."
+        Toast.makeText(context, "Receipt scanned. Please review the details", Toast.LENGTH_SHORT).show()
     }
 
     val scheme = MaterialTheme.colorScheme
@@ -432,6 +436,7 @@ fun AddTransactionScreen(
                                 )
                                 viewModel.addExpense(newExpense) { success, message ->
                                     if (success) {
+                                        Toast.makeText(context, "Expense saved", Toast.LENGTH_SHORT).show()
                                         onSaveSuccess()
                                     } else {
                                         error = message
