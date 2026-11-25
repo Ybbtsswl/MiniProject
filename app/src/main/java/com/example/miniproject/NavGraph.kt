@@ -40,6 +40,7 @@ sealed class Screen(val route: String) {
     object Expense : Screen("expense")
     object AllExpenses : Screen("all_expenses")
     object Budget : Screen("budget")
+    object Savings : Screen("savings")
     object AddTransaction : Screen("add_transaction/{userId}?income={income}") {
         fun createRoute(userId: String, income: Boolean = false) =
             "add_transaction/$userId?income=$income"
@@ -149,6 +150,7 @@ fun AppNavHost(
                 onBudget = {
                     navController.navigate(Screen.Budget.route)
                 },
+                onSavings = { navController.navigate(Screen.Savings.route) },
                 onAddSplitBill = {
                     userId?.let { navController.navigate(Screen.AddSplitBill.createRoute(it)) }
                 }
@@ -201,6 +203,13 @@ fun AppNavHost(
                 userId = supabaseClient.auth.currentUserOrNull()?.id,
                 onBack = { navController.popBackStack() },
                 onManageExpenses = { navController.navigate(Screen.Expense.route) }
+            )
+        }
+
+        composable(Screen.Savings.route) {
+            SavingsScreen(
+                userId = supabaseClient.auth.currentUserOrNull()?.id,
+                onBack = { navController.popBackStack() }
             )
         }
 

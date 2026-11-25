@@ -58,6 +58,7 @@ fun DashboardScreen(
     onSplitBill: () -> Unit = {},
     onAddSplitBill: () -> Unit = {},
     onBudget: () -> Unit = {},
+    onSavings: () -> Unit = {},
     onSignOut: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -110,7 +111,8 @@ fun DashboardScreen(
                         onAddIncome = onAddIncome,
                         onExpense = onExpense,
                         onSplitBill = onSplitBill,
-                        onBudget = onBudget
+                        onBudget = onBudget,
+                        onSavings = onSavings
                     )
                     1 -> ScreenPlaceholder("Analytics")
                     2 -> SplitBillScreen(
@@ -134,7 +136,8 @@ private fun DashboardContent(
     onAddIncome: () -> Unit,
     onExpense: () -> Unit,
     onSplitBill: () -> Unit,
-    onBudget: () -> Unit
+    onBudget: () -> Unit,
+    onSavings: () -> Unit
 ) {
     val currentMonth = LocalDate.now().toString().substring(0, 7)
     val monthlyExpenses = expenses
@@ -168,7 +171,8 @@ private fun DashboardContent(
             onIncome = onAddIncome,
             onExpense = onExpense,
             onSplitBill = onSplitBill,
-            onBudget = onBudget
+            onBudget = onBudget,
+            onSavings = onSavings
         )
         Spacer(modifier = Modifier.height(12.dp))
     }
@@ -355,7 +359,8 @@ private fun QuickActionGrid(
     onIncome: () -> Unit,
     onExpense: () -> Unit,
     onSplitBill: () -> Unit,
-    onBudget: () -> Unit
+    onBudget: () -> Unit,
+    onSavings: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -367,7 +372,7 @@ private fun QuickActionGrid(
             QuickAction("📋", "Split Bill", Modifier.weight(1f), onClick = onSplitBill)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickAction("🐷", "Savings", Modifier.weight(1f)) {}
+            QuickAction("🐷", "Savings", Modifier.weight(1f), onClick = onSavings)
             QuickAction("⊘", "Budget", Modifier.weight(1f), onClick = onBudget)
         }
     }
