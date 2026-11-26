@@ -163,7 +163,10 @@ class ExpenseRepository {
                 val result = supabase.from(expenseTable)
                     .update(expense) {
                         select()
-                        filter { eq("expense_id", expense.expenseId) }
+                        filter {
+                            eq("expense_id", expense.expenseId)
+                            eq("user_id", expense.userId)
+                        }
                     }
                     .decodeSingle<Expense>()
                 Result.success(result)
@@ -173,12 +176,15 @@ class ExpenseRepository {
         }
 
     // DELETE — Remove expense
-    suspend fun deleteExpense(expenseId: String, string: String?): Result<Unit> =
+    suspend fun deleteExpense(expenseId: String, userId: String?): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 supabase.from(expenseTable)
                     .delete {
-                        filter { eq("expense_id", expenseId) }
+                        filter {
+                            eq("expense_id", expenseId)
+                            if (!userId.isNullOrEmpty()) eq("user_id", userId)
+                        }
                     }
                 Result.success(Unit)
             } catch (e: Exception) {

@@ -28,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.miniproject.SupabaseClient
 import com.example.miniproject.data.Expense
 import com.example.miniproject.data.Income
 import com.example.miniproject.repository.ExpenseRepository
@@ -42,12 +43,21 @@ import com.example.miniproject.ui.theme.MoneeYellow
 import com.example.miniproject.ui.theme.MoneeYellowSoft
 import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeHero
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.abs
 
 private val CardColor = Color.White
+private val IncomeOrange = Color(0xFFFF8A1F)
 
 @Composable
 fun DashboardScreen(
@@ -57,6 +67,7 @@ fun DashboardScreen(
     onExpense: () -> Unit = {},
     onSplitBill: () -> Unit = {},
     onAddSplitBill: () -> Unit = {},
+    onBillClick: (String) -> Unit = {},
     onBudget: () -> Unit = {},
     onSavings: () -> Unit = {},
     onReports: () -> Unit = {},
@@ -68,6 +79,26 @@ fun DashboardScreen(
     val repository = remember { ExpenseRepository() }
     val incomeRepository = remember { IncomeRepository() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var userName by remember { mutableStateOf<String?>(null) }
+
+    // Logged-in user's name from the profiles table (name / full_name / username)
+    LaunchedEffect(userId) {
+        userName = if (userId == null) null else withContext(Dispatchers.IO) {
+            try {
+                val row = SupabaseClient.instance.from("profiles")
+                    .select {
+                        filter { eq("id", userId) }
+                        limit(1)
+                    }
+                    .decodeSingleOrNull<JsonObject>()
+                listOf("name", "full_name", "username").firstNotNullOfOrNull { key ->
+                    (row?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
 
     LaunchedEffect(userId, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -107,6 +138,7 @@ fun DashboardScreen(
             ) {
                 when (selectedTab) {
                     0 -> DashboardContent(
+                        userName = userName,
                         expenses = expenses,
                         incomes = incomes,
                         onAddIncome = onAddIncome,
@@ -120,7 +152,7 @@ fun DashboardScreen(
                     2 -> SplitBillScreen(
                         userId = userId ?: "",
                         viewModel = viewModel(),
-                        onBillClick = { },
+                        onBillClick = onBillClick,
                         onCreateClick = onAddSplitBill,
                         onBack = { selectedTab = 0 }
                     )
@@ -133,6 +165,7 @@ fun DashboardScreen(
 
 @Composable
 private fun DashboardContent(
+    userName: String?,
     expenses: List<Expense>,
     incomes: List<Income>,
     onAddIncome: () -> Unit,
@@ -151,17 +184,25 @@ private fun DashboardContent(
         .sumOf { it.amount }
     val balance = income - monthlyExpenses
 
+    // Real change vs last month's balance (income - expenses)
+    val prevMonth = LocalDate.now().minusMonths(1).toString().substring(0, 7)
+    val prevIncome = incomes.filter { it.incomeDate.startsWith(prevMonth) }.sumOf { it.amount }
+    val prevExpenses = expenses.filter { it.date.startsWith(prevMonth) }.sumOf { it.amount }
+    val prevBalance = prevIncome - prevExpenses
+    val balanceChange: Double? =
+        if (prevBalance != 0.0) (balance - prevBalance) / abs(prevBalance) * 100 else null
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        DashboardHeader()
+        DashboardHeader(userName = userName)
         Spacer(modifier = Modifier.height(22.dp))
-        BalanceCard(balance = balance)
+        BalanceCard(balance = balance, change = balanceChange)
         Spacer(modifier = Modifier.height(18.dp))
-        MonthlyOverview(income = income, expenses = monthlyExpenses)
+        MonthlyOverview(income = income, expenses = monthlyExpenses, allExpenses = expenses, allIncomes = incomes)
         Spacer(modifier = Modifier.height(22.dp))
         Text(
             text = "Quick Actions",
@@ -183,26 +224,20 @@ private fun DashboardContent(
 }
 
 @Composable
-private fun DashboardHeader() {
+private fun DashboardHeader(userName: String?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "monee",
+            text = "Monee",
             color = MoneeInk,
-            fontSize = 18.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            text = "•",
-            color = MoneeAmber,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(horizontal = 10.dp)
-        )
-        Text(text = "Home", color = MoneeMuted, fontSize = 16.sp)
-        Spacer(modifier = Modifier.width(52.dp))
+        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(2.dp))
         Box(
             modifier = Modifier
                 .size(30.dp)
@@ -214,7 +249,7 @@ private fun DashboardHeader() {
     }
     Column(modifier = Modifier.padding(top = 20.dp)) {
         Text(
-            text = "Hello, User! 👋",
+            text = "Hello, ${userName ?: "there"}! 👋",
             color = MoneeInk,
             fontSize = 23.sp,
             fontWeight = FontWeight.Bold
@@ -229,7 +264,7 @@ private fun DashboardHeader() {
 }
 
 @Composable
-private fun BalanceCard(balance: Double) {
+private fun BalanceCard(balance: Double, change: Double?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -239,7 +274,7 @@ private fun BalanceCard(balance: Double) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(text = "Total Balance  ◉", color = MoneeMuted, fontSize = 12.sp)
+            Text(text = "Total Balance", color = MoneeMuted, fontSize = 12.sp)
             Text(
                 text = formatCurrency(balance),
                 color = MoneeInk,
@@ -254,18 +289,32 @@ private fun BalanceCard(balance: Double) {
                 .background(Color.White.copy(alpha = 0.75f))
                 .padding(horizontal = 11.dp, vertical = 7.dp)
         ) {
-            Text(
-                text = "↗ +12.4%",
-                color = MoneeInk,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = when {
+                        change == null -> "–"
+                        change >= 0 -> "↗ " + String.format(Locale.US, "%+.1f%%", change)
+                        else -> "↘ " + String.format(Locale.US, "%.1f%%", change)
+                    },
+                    color = MoneeInk,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (change == null) "no last month data" else "vs last month",
+                    color = MoneeMuted,
+                    fontSize = 9.sp
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun MonthlyOverview(income: Double, expenses: Double) {
+private fun MonthlyOverview(
+    income: Double, expenses: Double,
+    allExpenses: List<Expense>, allIncomes: List<Income>
+) {
     val shape = RoundedCornerShape(22.dp)
     val monthLabel = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM yyyy")) }
 
@@ -292,11 +341,11 @@ private fun MonthlyOverview(income: Double, expenses: Double) {
         }
         Spacer(modifier = Modifier.height(14.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MonthlyMetric("Income", formatCurrency(income), MoneeAmber, Modifier.weight(1f))
-            MonthlyMetric("Expenses", formatCurrency(expenses), MoneeRed, Modifier.weight(1f), amountColor = MoneeRed)
+            MonthlyMetric("Income", formatCurrency(income), IncomeOrange, Modifier.weight(1f))
+            MonthlyMetric("Expenses", formatCurrency(expenses), MoneeYellow, Modifier.weight(1f), amountColor = MoneeRed)
         }
         Spacer(modifier = Modifier.height(16.dp))
-        SpendingChart(expenses = expenses)
+        SpendingChart(expenses = allExpenses, incomes = allIncomes)
     }
 }
 
@@ -326,25 +375,69 @@ private fun MonthlyMetric(
 }
 
 @Composable
-private fun SpendingChart(expenses: Double) {
-    val values = if (expenses == 0.0) List(7) { 0 } else listOf(32, 66, 38, 70, 54, 36, 24)
-    val labels = listOf("M", "T", "W", "T", "F", "S", "S")
+private fun SpendingChart(expenses: List<Expense>, incomes: List<Income>) {
+    // Real data: income and expenses for each of the last 7 days (today is the last bar).
+    // Each bar is stacked: expenses (yellow) at the bottom, income (orange) on top.
+    val today = remember { LocalDate.now() }
+    val days = remember(today) { (6 downTo 0).map { today.minusDays(it.toLong()) } }
+    val expenseTotals = days.map { d ->
+        val key = d.toString()
+        expenses.filter { it.date.startsWith(key) }.sumOf { it.amount }
+    }
+    val incomeTotals = days.map { d ->
+        val key = d.toString()
+        incomes.filter { it.incomeDate.startsWith(key) }.sumOf { it.amount }
+    }
+    val maxTotal = days.indices.maxOfOrNull { expenseTotals[it] + incomeTotals[it] } ?: 0.0
+    val maxBar = 72f
+
     Row(
-        modifier = Modifier.fillMaxWidth().height(92.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "Last 7 days", color = MoneeMuted, fontSize = 11.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(IncomeOrange))
+            Text(text = "  Income    ", color = MoneeMuted, fontSize = 11.sp)
+            Box(Modifier.size(8.dp).clip(CircleShape).background(MoneeYellow))
+            Text(text = "  Expenses", color = MoneeMuted, fontSize = 11.sp)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(100.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Bottom
     ) {
-        values.forEachIndexed { i, v ->
-            val highlighted = i == 1 || i == 3 || i == 4
+        days.forEachIndexed { i, day ->
+            val exp = expenseTotals[i]
+            val inc = incomeTotals[i]
+            val isToday = i == days.lastIndex
+            val expH = if (maxTotal > 0.0 && exp > 0.0) maxOf(4f, (exp / maxTotal).toFloat() * maxBar) else 0f
+            val incH = if (maxTotal > 0.0 && inc > 0.0) maxOf(4f, (inc / maxTotal).toFloat() * maxBar) else 0f
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .width(34.dp)
-                        .height(v.dp)
+                        .width(30.dp)
                         .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                        .background(MoneeButtonBrush, alpha = if (highlighted) 1f else 0.55f)
+                ) {
+                    if (expH == 0f && incH == 0f) {
+                        Box(Modifier.fillMaxWidth().height(3.dp).background(MoneeBorder))
+                    }
+                    if (incH > 0f) {
+                        Box(Modifier.fillMaxWidth().height(incH.dp).background(IncomeOrange))
+                    }
+                    if (expH > 0f) {
+                        Box(Modifier.fillMaxWidth().height(expH.dp).background(MoneeYellow))
+                    }
+                }
+                Text(
+                    text = day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH),
+                    color = if (isToday) MoneeInk else MoneeMuted,
+                    fontSize = 10.sp,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.padding(top = 5.dp)
                 )
-                Text(labels[i], color = MoneeMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
             }
         }
     }

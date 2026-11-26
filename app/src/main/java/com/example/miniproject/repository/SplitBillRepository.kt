@@ -25,12 +25,34 @@ class SplitBillRepository(
     suspend fun getSplitBillsForUser(userId: String): Result<List<SplitBill>> =
         withContext(Dispatchers.IO) {
             try {
-                val bills = supabase.postgrest["split_bills"]
+                // Bills you created ...
+                val own = supabase.postgrest["split_bills"]
                     .select {
                         filter { eq("user_id", userId) }
                     }
                     .decodeList<SplitBill>()
-                Result.success(bills)
+
+                // ... plus bills where you are a participant (a split_members row with your user id).
+                // If this second lookup fails, still show your own bills.
+                val shared = try {
+                    val billIds = supabase.postgrest["split_members"]
+                        .select { filter { eq("user_id", userId) } }
+                        .decodeList<SplitMember>()
+                        .map { it.splitBillId }
+                        .filter { it.isNotEmpty() }
+                        .distinct()
+                        .filter { id -> own.none { it.splitBillId == id } }
+
+                    if (billIds.isEmpty()) emptyList()
+                    else supabase.postgrest["split_bills"]
+                        .select { filter { isIn("split_bill_id", billIds) } }
+                        .decodeList<SplitBill>()
+                } catch (e: Exception) {
+                    android.util.Log.e("SplitBillRepo", "loading shared bills failed", e)
+                    emptyList()
+                }
+
+                Result.success((own + shared).distinctBy { it.splitBillId })
             } catch (e: Exception) {
                 Result.failure(e)
             }

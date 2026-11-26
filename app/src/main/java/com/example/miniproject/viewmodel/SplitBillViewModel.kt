@@ -401,14 +401,44 @@ class SplitBillViewModel(
         }
     }
 
-    // Marks ALL of one member's unpaid allocations as paid (a member has one per item)
-    fun settleMember(billId: String, memberId: String, onDone: () -> Unit = {}) {
+    // Marks ALL of one member's unpaid allocations as paid (a member has one per item).
+    // When a PARTICIPANT (not the bill's creator) marks their own share as paid, that share is
+    // also recorded as an expense in their account, under the "Bills" category.
+    fun settleMember(
+        billId: String,
+        memberId: String,
+        currentUserId: String? = null,
+        onDone: () -> Unit = {}
+    ) {
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                repo.getAllocations(billId).getOrThrow()
+                val unpaid = repo.getAllocations(billId).getOrThrow()
                     .filter { it.splitMemberId == memberId && !it.isPaid }
-                    .forEach { repo.markAsPaid(it.splitAllocationId, now).getOrThrow() }
+                unpaid.forEach { repo.markAsPaid(it.splitAllocationId, now).getOrThrow() }
+
+                if (currentUserId != null && unpaid.isNotEmpty()) {
+                    val bill = repo.getSplitBill(billId).getOrNull()
+                    val member = repo.getMembers(billId).getOrNull()
+                        ?.find { it.splitMemberId == memberId }
+                    val share = unpaid.sumOf { it.shareAmount }
+
+                    // Only for the participant paying their OWN share. The creator's share was
+                    // already added as an expense when the bill was created.
+                    if (bill != null && member?.userId == currentUserId &&
+                        bill.creatorId != currentUserId && share > 0
+                    ) {
+                        expenseRepo.addSplitBillExpense(
+                            userId = currentUserId,
+                            billId = billId,
+                            title = bill.title,
+                            date = LocalDate.now().toString(),
+                            amount = share
+                        ).onFailure {
+                            android.util.Log.e("SplitBillVM", "Could not add expense for paid share", it)
+                        }
+                    }
+                }
                 onDone()
             } catch (e: Exception) {
                 android.util.Log.e("SplitBillVM", "settleMember failed", e)

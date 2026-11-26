@@ -155,6 +155,9 @@ fun AppNavHost(
                 onReports = { navController.navigate(Screen.Reports.route) },
                 onAddSplitBill = {
                     userId?.let { navController.navigate(Screen.AddSplitBill.createRoute(it)) }
+                },
+                onBillClick = { billId ->
+                    navController.navigate(Screen.SplitBillDetail.createRoute(billId))
                 }
             ) {
                 scope.launch {
@@ -348,7 +351,7 @@ fun AppNavHost(
                         errorMessage = uiState.error,
                         onBack = { navController.popBackStack() },
                         onSettleMember = { memberId ->
-                            splitBillViewModel.settleMember(billId, memberId) {
+                            splitBillViewModel.settleMember(billId, memberId, userId) {
                                 reload(refreshList = true)
                             }
                         },
