@@ -54,6 +54,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+// Fixed income categories (income has no categories table)
+private val INCOME_CATEGORIES = listOf("Salary", "Invest", "Gift")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
@@ -66,6 +69,7 @@ fun AddTransactionScreen(
     var isExpense by remember { mutableStateOf(initialIsExpense) }
     var amount by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
+    var selectedIncomeCategory by remember { mutableStateOf<String?>(null) }
     var description by remember { mutableStateOf("") }
     var displayDate by remember {
         mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")))
@@ -168,6 +172,7 @@ fun AddTransactionScreen(
                                 .clickable {
                                     isExpense = label == "Expense"
                                     selectedCategoryId = null
+                                    selectedIncomeCategory = null
                                 }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -252,10 +257,13 @@ fun AddTransactionScreen(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (selectedCategoryId != null) {
-                    val selectedCat = categories.find { it.categoryId == selectedCategoryId }
+                val selectedLabel = if (isExpense)
+                    categories.find { it.categoryId == selectedCategoryId }?.name
+                else selectedIncomeCategory
+
+                if (selectedLabel != null) {
                     Text(
-                        text = "Selected: ${selectedCat?.name ?: ""}",
+                        text = "Selected: $selectedLabel",
                         fontSize = 12.sp,
                         color = MoneeAmber,
                         fontWeight = FontWeight.Medium
@@ -281,17 +289,13 @@ fun AddTransactionScreen(
                         }
                     }
                 }
-            } else if (isLoadingCategories) {
-                Text(text = "Loading categories...", fontSize = 13.sp, color = MoneeMuted)
-            } else if (categories.isEmpty()) {
-                Text(text = "No categories found", fontSize = 13.sp, color = MoneeMuted)
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(categories) { cat ->
-                        CategoryChip(
-                            category = cat,
-                            selected = selectedCategoryId == cat.categoryId,
-                            onClick = { selectedCategoryId = cat.categoryId }
+                    items(INCOME_CATEGORIES) { label ->
+                        IncomeCategoryChip(
+                            label = label,
+                            selected = selectedIncomeCategory == label,
+                            onClick = { selectedIncomeCategory = label }
                         )
                     }
                 }
@@ -417,7 +421,8 @@ fun AddTransactionScreen(
                     val value = amount.toDoubleOrNull()
                     when {
                         value == null || value <= 0.0 -> error = "Enter a valid amount"
-                        selectedCategoryId == null -> error = "Pick a category"
+                        isExpense && selectedCategoryId == null -> error = "Pick a category"
+                        !isExpense && selectedIncomeCategory == null -> error = "Pick a category"
                         userId == null -> error = "User not logged in"
                         else -> {
                             error = null
@@ -437,7 +442,7 @@ fun AddTransactionScreen(
                                 val newExpense = Expense(
                                     userId = userId,
                                     amount = value,
-                                    categoryId = selectedCategoryId?:"",
+                                    categoryId = selectedCategoryId ?: "",
                                     category = selectedCat?.name ?: "",
                                     description = description.trim().ifEmpty { "" },
                                     date = formattedDate
@@ -451,10 +456,13 @@ fun AddTransactionScreen(
                                     }
                                 }
                             } else {
+                                // NOTE: categoryId now holds the income label (Salary / Invest / Gift).
+                                // If income.category_id is a uuid/foreign key, change the column to text
+                                // or store the label in a separate text field instead.
                                 val newIncome = Income(
                                     userId = userId,
                                     amount = value,
-                                    categoryId = selectedCategoryId,
+                                    categoryId = selectedIncomeCategory,
                                     incomeDate = formattedDate,
                                     description = description.trim().ifEmpty { "" }
                                 )

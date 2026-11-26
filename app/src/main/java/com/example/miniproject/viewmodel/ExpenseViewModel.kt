@@ -90,6 +90,7 @@ class ExpenseViewModel : ViewModel() {
         viewModelScope.launch {
             repository.getExpensesByMonth(userId, month)
                 .onSuccess { list ->
+                    android.util.Log.d("ExpenseVM", "month=$month userId=$userId loaded=${list.size} -> ${list.map { it.date }}")
                     _uiState.value = _uiState.value.copy(
                         expenses = list,
                         isLoading = false,
@@ -98,6 +99,7 @@ class ExpenseViewModel : ViewModel() {
                     updateTotal()
                 }
                 .onFailure { err ->
+                    android.util.Log.e("ExpenseVM", "month load failed", err)
                     _uiState.value = _uiState.value.copy(
                         error = err.message ?: "Failed to load expenses",
                         isLoading = false

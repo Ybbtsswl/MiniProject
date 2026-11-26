@@ -10,15 +10,26 @@ import com.example.miniproject.data.SplitAllocation
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 class SplitBillRepository(
     private val supabase: io.github.jan.supabase.SupabaseClient = MySupabaseClient.instance
 ) {
+    // Supabase generates every primary key (default gen_random_uuid()).
+    // The UUIDs created in the UI are only temporary keys and are never sent to the database.
+    private val json = Json { encodeDefaults = true }
+
+    // Serialize a row but drop its id column so Supabase generates it
+    private inline fun <reified T> noId(value: T, idColumn: String): JsonObject =
+        JsonObject(json.encodeToJsonElement(value).jsonObject.filterKeys { it != idColumn })
+
     // ==========================================
     // SPLIT BILL — CRUD
     // ==========================================
@@ -75,7 +86,7 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 val result = supabase.postgrest["split_bills"]
-                    .insert(bill) { select() }
+                    .insert(noId(bill, "split_bill_id")) { select() }
                     .decodeSingle<SplitBill>()
                 Result.success(result.splitBillId)
             } catch (e: Exception) {
@@ -143,7 +154,7 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 val result = supabase.postgrest["split_members"]
-                    .insert(member) { select() }
+                    .insert(noId(member, "split_member_id")) { select() }
                     .decodeSingle<SplitMember>()
                 Result.success(result.splitMemberId)
             } catch (e: Exception) {
@@ -185,7 +196,7 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 val result = supabase.postgrest["split_items"]
-                    .insert(item) { select() }
+                    .insert(noId(item, "split_item_id")) { select() }
                     .decodeSingle<SplitItem>()
                 Result.success(result.splitItemId)
             } catch (e: Exception) {
@@ -245,7 +256,7 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 val result = supabase.postgrest["split_allocations"]
-                    .insert(allocation) { select() }
+                    .insert(noId(allocation, "split_allocation_id")) { select() }
                     .decodeSingle<SplitAllocation>()
                 Result.success(result.splitAllocationId)
             } catch (e: Exception) {
@@ -303,7 +314,7 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             try {
                 val result = supabase.postgrest["participant_group"]
-                    .insert(group) { select() }
+                    .insert(noId(group, "group_id")) { select() }
                     .decodeSingle<ParticipantGroup>()
                 Result.success(result.groupId)
             } catch (e: Exception) {
@@ -329,12 +340,14 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             var groupId: String? = null
             try {
-                groupId = createGroup(group).getOrThrow()
+                val newGroupId = createGroup(group).getOrThrow()
+                groupId = newGroupId
                 if (members.isNotEmpty()) {
+                    // NOTE: "group_member_id" must match the @SerialName of GroupMember's id column
                     supabase.postgrest["participant_group_members"]
-                        .insert(members.map { it.copy(groupId = groupId) })
+                        .insert(members.map { noId(it.copy(groupId = newGroupId), "group_member_id") })
                 }
-                Result.success(groupId)
+                Result.success(newGroupId)
             } catch (e: Exception) {
                 android.util.Log.e("SplitBillRepo", "createGroupWithMembers failed", e)
                 groupId?.let { deleteGroup(it) }
@@ -369,11 +382,36 @@ class SplitBillRepository(
         withContext(Dispatchers.IO) {
             var billId: String? = null
             try {
-                billId = createSplitBill(data.bill).getOrThrow()
-                data.members.forEach { addMember(it.copy(splitBillId = billId)).getOrThrow() }
-                data.items.forEach { addItem(it.copy(splitBillId = billId)).getOrThrow() }
-                data.allocations.forEach { addAllocation(it).getOrThrow() }
-                Result.success(billId)
+                val newBillId = createSplitBill(data.bill).getOrThrow()
+                billId = newBillId
+
+                // temp id (from the UI) -> real id (from Supabase)
+                val memberIds = mutableMapOf<String, String>()
+                data.members.forEach { m ->
+                    memberIds[m.splitMemberId] =
+                        addMember(m.copy(splitBillId = newBillId)).getOrThrow()
+                }
+
+                val itemIds = mutableMapOf<String, String>()
+                data.items.forEach { i ->
+                    itemIds[i.splitItemId] = addItem(
+                        i.copy(
+                            splitBillId = newBillId,
+                            payerId = i.payerId?.let { memberIds[it] }
+                        )
+                    ).getOrThrow()
+                }
+
+                data.allocations.forEach { a ->
+                    addAllocation(
+                        a.copy(
+                            splitItemId = itemIds.getValue(a.splitItemId),
+                            splitMemberId = memberIds.getValue(a.splitMemberId),
+                            payerId = a.payerId?.let { memberIds[it] }
+                        )
+                    ).getOrThrow()
+                }
+                Result.success(newBillId)
             } catch (e: Exception) {
                 android.util.Log.e("SplitBillRepo", "createCompleteSplitBill failed", e)
                 // Don't leave a half-created bill behind
