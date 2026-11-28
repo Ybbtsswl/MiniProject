@@ -50,7 +50,13 @@ import java.util.Locale
 import kotlin.math.abs
 
 @Composable
-fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
+fun IncomeScreen(
+    userId: String,
+    onBack: () -> Unit,
+    onAddIncome: () -> Unit,
+    onSeeAll: (String) -> Unit = {},
+    showAllHistory: Boolean = false
+) {
     var selectedMonth by remember { mutableStateOf(YearMonth.now().toString()) }
     var selectedTab by remember { mutableStateOf("All") }
     var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
@@ -72,7 +78,8 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
     val displayMonth = runCatching {
         LocalDate.parse("$selectedMonth-01").format(DateTimeFormatter.ofPattern("MMMM yyyy"))
     }.getOrDefault(selectedMonth)
-    val monthIncomes = incomes.filter { it.incomeDate.startsWith(selectedMonth) }
+    val monthIncomes = if (showAllHistory) incomes
+    else incomes.filter { it.incomeDate.startsWith(selectedMonth) }
     val monthlyTotal = monthIncomes.sumOf { it.amount }
     val categoryName: (Income) -> String = { income ->
         categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.name
@@ -144,8 +151,21 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Income history", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MoneeInk)
-                Text("See all", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MoneeAmber)
+                Text(
+                    if (showAllHistory) "All income history" else "Income history",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MoneeInk
+                )
+                if (!showAllHistory) {
+                    Text(
+                        "See all",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MoneeAmber,
+                        modifier = Modifier.clickable { onSeeAll(selectedMonth) }
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(12.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -399,7 +419,7 @@ private fun incomeChangeText(incomes: List<Income>, month: String): String {
     else "↓ ${String.format(Locale.US, "%.1f", abs(change))}% less than last month"
 }
 
-private fun formatIncomeAmount(amount: Double): String {
+internal fun formatIncomeAmount(amount: Double): String {
     val format = NumberFormat.getNumberInstance(Locale.US).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2

@@ -45,6 +45,9 @@ sealed class Screen(val route: String) {
     object ForgotPassword : Screen("forgot_password")
     object Dashboard : Screen("dashboard")
     object Income : Screen("income")
+    object AllIncome : Screen("all_income/{month}") {
+        fun createRoute(month: String) = "all_income/$month"
+    }
     object Expense : Screen("expense")
     object AllExpenses : Screen("all_expenses")
     object Budget : Screen("budget")
@@ -264,6 +267,25 @@ fun AppNavHost(
             if (userId != null) {
                 IncomeScreen(
                     userId = userId,
+                    onBack = { navController.popBackStack() },
+                    onSeeAll = { month -> navController.navigate(Screen.AllIncome.createRoute(month)) },
+                    onAddIncome = {
+                        navController.navigate(Screen.AddTransaction.createRoute(userId, income = true))
+                    }
+                )
+            }
+        }
+
+        composable(
+            route = Screen.AllIncome.route,
+            arguments = listOf(navArgument("month") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
+            val month = backStackEntry.arguments?.getString("month") ?: java.time.YearMonth.now().toString()
+            if (userId != null) {
+                AllIncomeScreen(
+                    userId = userId,
+                    initialMonth = month,
                     onBack = { navController.popBackStack() },
                     onAddIncome = {
                         navController.navigate(Screen.AddTransaction.createRoute(userId, income = true))
