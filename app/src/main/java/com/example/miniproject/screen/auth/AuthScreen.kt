@@ -52,6 +52,8 @@ fun AuthScreen(
     isRegister: Boolean,
     onModeChange: (Boolean) -> Unit,
     onSuccess: () -> Unit,
+    onForgotPassword: () -> Unit,
+    onRegistrationOtpRequired: (email: String, name: String) -> Unit,
     onAuthenticate: suspend (AuthRequest) -> Result<AuthOutcome>
 ) {
     var name by rememberSaveable { mutableStateOf("") }
@@ -196,7 +198,7 @@ fun AuthScreen(
             if (!isRegister) {
                 TextButton(
                     onClick = {
-                        error = "Enter your email to reset your password."
+                        onForgotPassword()
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
@@ -259,9 +261,8 @@ fun AuthScreen(
                             ).onSuccess { outcome ->
                                 when (outcome) {
                                     AuthOutcome.SignedIn -> onSuccess()
-                                    AuthOutcome.EmailConfirmationRequired -> {
-                                        error = "Account created. Please confirm your email before logging in."
-                                    }
+                                    AuthOutcome.RegistrationOtpRequired ->
+                                        onRegistrationOtpRequired(email.trim(), name.trim())
                                 }
                             }.onFailure { throwable ->
                                 val message = throwable.message.orEmpty()

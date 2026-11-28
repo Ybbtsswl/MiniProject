@@ -22,11 +22,14 @@ import androidx.navigation.navArgument
 import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.screen.*
 import com.example.miniproject.screen.auth.AuthScreen
+import com.example.miniproject.screen.auth.RegistrationOtpScreen
+import com.example.miniproject.screen.auth.ForgotPasswordScreen
 import com.example.miniproject.screen.onboarding.OnboardingRoute
 import com.example.miniproject.viewmodel.SplitBillViewModel
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
+import android.net.Uri
 
 
 sealed class Screen(val route: String) {
@@ -35,6 +38,11 @@ sealed class Screen(val route: String) {
     object Auth : Screen("auth/{isRegister}") {
         fun createRoute(isRegister: Boolean) = "auth/$isRegister"
     }
+    object RegistrationOtp : Screen("registration_otp/{email}/{name}") {
+        fun createRoute(email: String, name: String) =
+            "registration_otp/${Uri.encode(email)}/${Uri.encode(name)}"
+    }
+    object ForgotPassword : Screen("forgot_password")
     object Dashboard : Screen("dashboard")
     object Income : Screen("income")
     object Expense : Screen("expense")
@@ -124,9 +132,58 @@ fun AppNavHost(
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
                 },
+                onForgotPassword = {
+                    navController.navigate(Screen.ForgotPassword.route)
+                },
+                onRegistrationOtpRequired = { email, name ->
+                    navController.navigate(Screen.RegistrationOtp.createRoute(email, name)) {
+                        popUpTo(Screen.Auth.route) { inclusive = true }
+                    }
+                },
                 onAuthenticate = { request ->
                     authRepository.authenticate(request)
                 }
+            )
+        }
+
+        composable(Screen.ForgotPassword.route) {
+            val authRepository = remember { AuthRepository() }
+            ForgotPasswordScreen(
+                onRequestOtp = { email -> authRepository.requestPasswordRecovery(email) },
+                onVerifyOtp = { email, token -> authRepository.verifyRecoveryOtp(email, token) },
+                onUpdatePassword = { password -> authRepository.updateRecoveredPassword(password) },
+                onCompleted = {
+                    navController.navigate(Screen.Auth.createRoute(false)) {
+                        popUpTo(Screen.ForgotPassword.route) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.RegistrationOtp.route,
+            arguments = listOf(
+                navArgument("email") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val email = Uri.decode(backStackEntry.arguments?.getString("email").orEmpty())
+            val name = Uri.decode(backStackEntry.arguments?.getString("name").orEmpty())
+            val authRepository = remember { AuthRepository() }
+
+            RegistrationOtpScreen(
+                email = email,
+                onVerify = { token -> authRepository.verifyRegistrationOtp(email, token, name) },
+                onResend = { authRepository.resendRegistrationOtp(email) },
+                onVerified = {
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(Screen.RegistrationOtp.route) { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigate(Screen.Auth.createRoute(true)) {
+                    popUpTo(Screen.RegistrationOtp.route) { inclusive = true }
+                } }
             )
         }
 
