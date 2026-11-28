@@ -7,11 +7,13 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -46,9 +49,11 @@ import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.ui.theme.LocalThemeController
 import com.example.miniproject.ui.theme.ThemeMode
-import coil.compose.AsyncImage as CoilAsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.net.URL
 
 private val ProfileBackground = Color(0xFFF8F8FF)
 private val ProfileText = Color(0xFF172033)
@@ -89,7 +94,7 @@ fun ProfileScreen(
             repository.uploadAvatar(currentUserId, bytes, extension)
                 .onSuccess { url ->
                     // Keep the local preview even if the profile query returned
-                    // no row, then refresh the image URL to avoid Coil cache.
+                    // no row, then refresh the image URL to avoid displaying a stale bitmap.
                     profile = profile?.copy(avatarUrl = url)
                     avatarUrl = "$url?avatarVersion=${System.currentTimeMillis()}"
                     Toast.makeText(context, "Profile picture updated", Toast.LENGTH_SHORT).show()
@@ -229,11 +234,9 @@ private fun ProfileContent(
                     strokeWidth = 3.dp
                 )
             } else if (!avatarUrl.isNullOrBlank()) {
-                CoilAsyncImage(
-                    model = avatarUrl,
-                    contentDescription = "Profile picture",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                ProfileAvatarImage(
+                    imageUrl = avatarUrl,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
                 )
             } else {
                 Text("👩🏻", fontSize = 40.sp)
@@ -295,6 +298,37 @@ private fun ProfileContent(
             verticalAlignment = Alignment.CenterVertically
         ) { Text("↪  Log Out", color = ProfileText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ProfileAvatarImage(imageUrl: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var bitmap by remember(imageUrl) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(imageUrl) {
+        bitmap =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                        if (imageUrl.startsWith("content://")) {
+                            context.contentResolver.openInputStream(Uri.parse(imageUrl)).use {
+                                BitmapFactory.decodeStream(it)
+                            }
+                        } else {
+                            URL(imageUrl).openStream().use { BitmapFactory.decodeStream(it) }
+                        }
+                    }
+                    .getOrNull()
+            }
+    }
+
+    bitmap?.let {
+        Image(
+            bitmap = it.asImageBitmap(),
+            contentDescription = "Profile picture",
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
     }
 }
 
