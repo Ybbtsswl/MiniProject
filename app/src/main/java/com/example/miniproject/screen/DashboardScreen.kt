@@ -28,11 +28,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.miniproject.SupabaseClient
 import com.example.miniproject.data.Expense
 import com.example.miniproject.data.Income
 import com.example.miniproject.repository.ExpenseRepository
 import com.example.miniproject.repository.IncomeRepository
+import com.example.miniproject.repository.ProfileRepository
 import com.example.miniproject.ui.theme.MoneeAmber
 import com.example.miniproject.ui.theme.MoneeBorder
 import com.example.miniproject.ui.theme.MoneeButtonBrush
@@ -43,12 +43,6 @@ import com.example.miniproject.ui.theme.MoneeYellow
 import com.example.miniproject.ui.theme.MoneeYellowSoft
 import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeHero
-import io.github.jan.supabase.postgrest.from
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -81,23 +75,11 @@ fun DashboardScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var userName by remember { mutableStateOf<String?>(null) }
 
-    // Logged-in user's name from the profiles table (name / full_name / username)
+    // Always use the authenticated user's full_name from the profiles table.
     LaunchedEffect(userId) {
-        userName = if (userId == null) null else withContext(Dispatchers.IO) {
-            try {
-                val row = SupabaseClient.instance.from("profiles")
-                    .select {
-                        filter { eq("id", userId) }
-                        limit(1)
-                    }
-                    .decodeSingleOrNull<JsonObject>()
-                listOf("name", "full_name", "username").firstNotNullOfOrNull { key ->
-                    (row?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-                }
-            } catch (e: Exception) {
-                null
-            }
-        }
+        userName = userId?.let { ProfileRepository().getById(it).getOrNull()?.fullName }
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     LaunchedEffect(userId, lifecycleOwner) {
@@ -156,7 +138,10 @@ fun DashboardScreen(
                         onCreateClick = onAddSplitBill,
                         onBack = { selectedTab = 0 }
                     )
-                    3 -> ProfileScreen(userId = userId, onSignOut = onSignOut)
+                    3 -> ProfileScreen(
+                        userId = userId,
+                        onSignOut = onSignOut
+                    )
                 }
             }
         }

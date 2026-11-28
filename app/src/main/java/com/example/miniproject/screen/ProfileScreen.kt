@@ -1,6 +1,8 @@
 package com.example.miniproject.screen
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,6 +18,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.miniproject.data.Profile
 import com.example.miniproject.repository.ProfileRepository
+import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
@@ -41,9 +48,14 @@ private val ProfileBlue = Color(0xFFE6EEFF)
 private val ProfilePeach = Color(0xFFFFDEB3)
 
 @Composable
-fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
+fun ProfileScreen(
+    userId: String?,
+    onSignOut: () -> Unit
+) {
     var profile by remember { mutableStateOf<Profile?>(null) }
     var avatarUrl by remember { mutableStateOf<String?>(null) }
+    var darkMode by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf("main") }
     var showImagePicker by remember { mutableStateOf(false) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -55,6 +67,7 @@ fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
             repository.getById(userId).getOrNull()?.let { loadedProfile ->
                 profile = loadedProfile
                 avatarUrl = loadedProfile.avatarUrl
+                darkMode = loadedProfile.darkMode
             }
         }
     }
@@ -114,14 +127,28 @@ fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
         }
     }
 
-    ProfileContent(
-        name = profile?.fullName?.ifBlank { null } ?: "Alex Morgan",
-        email = profile?.email?.ifBlank { null } ?: "alex.morgan@gmail.com",
-        avatarUrl = avatarUrl,
-        isUploadingAvatar = isUploadingAvatar,
-        onChangeAvatar = { showImagePicker = true },
-        onSignOut = onSignOut
-    )
+    when (page) {
+        "settings" -> ProfileSettingsScreen(
+            profile = profile,
+            darkMode = darkMode,
+            onBack = { page = "main" },
+            onSaved = { updated ->
+                profile = updated
+                darkMode = updated.darkMode
+            }
+        )
+        "help" -> HelpSupportScreen(onBack = { page = "main" })
+        else -> ProfileContent(
+            name = profile?.fullName?.ifBlank { null } ?: "Alex Morgan",
+            email = profile?.email?.ifBlank { null } ?: "alex.morgan@gmail.com",
+            avatarUrl = avatarUrl,
+            isUploadingAvatar = isUploadingAvatar,
+            onChangeAvatar = { showImagePicker = true },
+            onMyProfile = { page = "settings" },
+            onHelpSupport = { page = "help" },
+            onSignOut = onSignOut
+        )
+    }
 
     if (showImagePicker) {
         AlertDialog(
@@ -153,6 +180,8 @@ private fun ProfileContent(
     avatarUrl: String?,
     isUploadingAvatar: Boolean,
     onChangeAvatar: () -> Unit,
+    onMyProfile: () -> Unit,
+    onHelpSupport: () -> Unit,
     onSignOut: () -> Unit
 ) {
     Column(
@@ -212,8 +241,8 @@ private fun ProfileContent(
         Spacer(Modifier.height(48.dp))
         SafeToSpendCard()
         Spacer(Modifier.height(18.dp))
-        ProfileItem("▣", "My Profile") { }
-        ProfileItem("♧", "Help & Support") { }
+        ProfileItem("▣", "My Profile", onClick = onMyProfile)
+        ProfileItem("♧", "Help & Support", onClick = onHelpSupport)
         ProfileItem("ⓘ", "About monee", "v2.4.1") { }
 
         Spacer(Modifier.height(18.dp))
@@ -228,6 +257,158 @@ private fun ProfileContent(
             verticalAlignment = Alignment.CenterVertically
         ) { Text("↪  Log Out", color = ProfileText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ProfileSettingsScreen(
+    profile: Profile?,
+    darkMode: Boolean,
+    onBack: () -> Unit,
+    onSaved: (Profile) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val profileRepository = remember { ProfileRepository() }
+    val authRepository = remember { AuthRepository() }
+    var name by remember(profile?.fullName) { mutableStateOf(profile?.fullName.orEmpty()) }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(ProfileBackground)
+            .verticalScroll(rememberScrollState()).padding(20.dp)
+    ) {
+        TextButton(onClick = onBack) { Text("‹  Back", color = ProfileText) }
+        Text("My Profile", color = ProfileText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(20.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it; message = "" },
+            label = { Text("Name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        Text("${profile?.email.orEmpty()}", color = ProfileMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(18.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                .background(Color.White).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Dark mode", color = ProfileText, fontSize = 15.sp)
+                Text("Use a darker app appearance", color = ProfileMuted, fontSize = 12.sp)
+            }
+            Switch(checked = darkMode, onCheckedChange = null, enabled = false)
+        }
+
+        Spacer(Modifier.height(22.dp))
+        Text("Change password", color = ProfileText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = newPassword,
+            onValueChange = { newPassword = it; message = "" },
+            label = { Text("New password") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = confirmPassword,
+            onValueChange = { confirmPassword = it; message = "" },
+            label = { Text("Confirm new password") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (message.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(message, color = Color(0xFFB3261E), fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(20.dp))
+        Button(
+            enabled = !saving && name.isNotBlank() &&
+                (newPassword.isBlank() || (newPassword.length >= 6 && newPassword == confirmPassword)),
+            onClick = {
+                val currentProfile = profile ?: return@Button
+                saving = true
+                scope.launch {
+                    var failed = false
+                    if (newPassword.isNotBlank()) {
+                        authRepository.updatePassword(newPassword).onFailure {
+                            message = it.message ?: "Password update failed"
+                            failed = true
+                        }
+                    }
+                    if (!failed) {
+                        profileRepository.updateProfileDetails(
+                            currentProfile.id,
+                            name.trim(),
+                            darkMode
+                        ).onSuccess {
+                            onSaved(it)
+                            newPassword = ""
+                            confirmPassword = ""
+                            message = "Profile updated successfully."
+                            Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            message = it.message ?: "Profile update failed"
+                        }
+                    }
+                    saving = false
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD447), contentColor = ProfileText),
+            shape = RoundedCornerShape(16.dp)
+        ) { Text(if (saving) "Saving..." else "Save changes", fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun HelpSupportScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.fillMaxSize().background(ProfileBackground)
+            .verticalScroll(rememberScrollState()).padding(20.dp)
+    ) {
+        TextButton(onClick = onBack) { Text("‹  Back", color = ProfileText) }
+        Text("Help & Support", color = ProfileText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(20.dp))
+        Text("Frequently asked questions", color = ProfileText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        SupportInfo("How do I add a transaction?", "Use the + button on the dashboard, then choose income or expense.")
+        SupportInfo("How do I change my profile picture?", "Open Profile and tap the picture to choose Gallery or Camera.")
+        SupportInfo("How do I reset my password?", "Use Forgot password on the login screen and enter the email OTP.")
+        Spacer(Modifier.height(22.dp))
+        Button(
+            onClick = {
+                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:support@monee.app"))
+                    .putExtra(Intent.EXTRA_SUBJECT, "Monee support request")
+                context.startActivity(intent)
+            },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD447), contentColor = ProfileText),
+            shape = RoundedCornerShape(16.dp)
+        ) { Text("Contact support", fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun SupportInfo(question: String, answer: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(14.dp))
+            .background(Color.White).padding(14.dp)
+    ) {
+        Text(question, color = ProfileText, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(5.dp))
+        Text(answer, color = ProfileMuted, fontSize = 13.sp)
     }
 }
 
@@ -301,6 +482,8 @@ private fun ProfileScreenPreview() {
             avatarUrl = null,
             isUploadingAvatar = false,
             onChangeAvatar = { },
+            onMyProfile = { },
+            onHelpSupport = { },
             onSignOut = { }
         )
     }

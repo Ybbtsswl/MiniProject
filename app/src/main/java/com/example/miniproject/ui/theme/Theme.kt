@@ -37,7 +37,6 @@ private val MoneeColorScheme = lightColorScheme(
 
 @Composable
 fun MiniProjectTheme(
-    darkTheme: Boolean = false,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

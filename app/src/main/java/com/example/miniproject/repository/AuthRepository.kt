@@ -129,4 +129,13 @@ class AuthRepository(
             Result.failure(error)
         }
     }
+
+    suspend fun updatePassword(password: String): Result<Unit> {
+        return try {
+            supabase.auth.updateUser { this.password = password }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
 }

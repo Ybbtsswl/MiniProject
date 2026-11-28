@@ -192,6 +192,14 @@ fun AppNavHost(
         composable(Screen.Dashboard.route) {
             val userId = supabaseClient.auth.currentUserOrNull()?.id
             val scope = rememberCoroutineScope()
+            val signOut: () -> Unit = {
+                scope.launch {
+                    supabaseClient.auth.signOut()
+                    navController.navigate(Screen.Auth.createRoute(false)) {
+                        popUpTo(Screen.Dashboard.route) { inclusive = true }
+                    }
+                }
+            }
 
             DashboardScreen(
                 userId = userId,
@@ -217,15 +225,9 @@ fun AppNavHost(
                 },
                 onBillClick = { billId ->
                     navController.navigate(Screen.SplitBillDetail.createRoute(billId))
-                }
-            ) {
-                scope.launch {
-                    supabaseClient.auth.signOut()
-                    navController.navigate(Screen.Auth.createRoute(false)) {
-                        popUpTo(Screen.Dashboard.route) { inclusive = true }
-                    }
-                }
-            }
+                },
+                onSignOut = signOut
+            )
         }
 
         composable(Screen.Expense.route) {

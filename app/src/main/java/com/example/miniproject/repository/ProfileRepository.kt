@@ -55,6 +55,27 @@ class ProfileRepository {
         }
     }
 
+    suspend fun updateProfileDetails(
+        userId: String,
+        fullName: String,
+        darkMode: Boolean
+    ): Result<Profile> = withContext(Dispatchers.IO) {
+        try {
+            val updated = supabase.from("profiles").update(
+                buildJsonObject {
+                    put("full_name", fullName)
+                    put("dark_mode", darkMode)
+                }
+            ) {
+                select()
+                filter { eq("id", userId) }
+            }.decodeSingle<Profile>()
+            Result.success(updated)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     suspend fun getById(userId: String): Result<Profile?> = withContext(Dispatchers.IO) {
         try {
             val profile = supabase.from("profiles")
