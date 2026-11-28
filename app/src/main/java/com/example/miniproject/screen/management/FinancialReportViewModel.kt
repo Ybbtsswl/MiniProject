@@ -61,15 +61,17 @@ class FinancialReportViewModel : ViewModel() {
         val today = LocalDate.now()
         val start =
             when (value) {
+                AnalyticsPeriod.DAILY -> today
                 AnalyticsPeriod.WEEKLY -> today.minusDays((today.dayOfWeek.value - 1).toLong())
+                AnalyticsPeriod.MONTHLY -> today.withDayOfMonth(1)
                 AnalyticsPeriod.YEARLY -> today.withDayOfYear(1)
-                else -> today.withDayOfMonth(1)
             }
         val end =
             when (value) {
+                AnalyticsPeriod.DAILY -> start
                 AnalyticsPeriod.WEEKLY -> start.plusDays(6)
+                AnalyticsPeriod.MONTHLY -> start.plusMonths(1).minusDays(1)
                 AnalyticsPeriod.YEARLY -> start.plusYears(1).minusDays(1)
-                else -> start.plusMonths(1).minusDays(1)
             }
         reportStartDate = start.toString()
         reportEndDate = end.toString()

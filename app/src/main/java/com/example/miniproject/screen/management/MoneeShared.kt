@@ -19,6 +19,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.miniproject.ui.theme.MoneeYellow
+import com.example.miniproject.ui.theme.MoneeYellowLight
+import com.example.miniproject.ui.theme.MoneeYellowSoft
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -29,13 +32,13 @@ import java.util.Locale
 // 1. DESIGN TOKENS & YELLOW/GOLD THEME PALETTE
 // ============================================================================
 object MoneeColors {
-    val BrandYellow = Color(0xFFFACC15)
-    val BrandGold = Color(0xFFEAB308)
-    val BrandDeep = Color(0xFFCA8A04)
+    val BrandYellow = MoneeYellowLight
+    val BrandGold = MoneeYellow
+    val BrandDeep = Color(0xFFE2B72F)
     val BrandDarkGold = Color(0xFFA16207)
-    val BrandSoft = Color(0xFFFEF08A)
-    val BrandLight = Color(0xFFFEFCE8)
-    val BrandBadgeBg = Color(0xFFFEF9C3)
+    val BrandSoft = MoneeYellowSoft
+    val BrandLight = Color(0xFFFFFBEB)
+    val BrandBadgeBg = MoneeYellowSoft
 
     val SurfaceBg = Color(0xFFF5F7FA)
     val CardWhite = Color(0xFFFFFFFF)

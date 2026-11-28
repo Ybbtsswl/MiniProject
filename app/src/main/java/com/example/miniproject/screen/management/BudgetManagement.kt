@@ -24,12 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.miniproject.ui.theme.MoneeGradientButton
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.Locale
@@ -109,10 +111,11 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
     val allAlerts = vm.getActiveBudgetAlerts()
     val visibleAlerts = allAlerts.filterNot { it.id in vm.dismissedAlertIds }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding =
+                PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Alert Banners
@@ -280,11 +283,10 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
                 }
             }
 
-            // Section Header with + Add Budget Pill Button
+            // Budget list heading. The primary action stays fixed at the bottom.
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
@@ -306,25 +308,6 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
                                 modifier = Modifier.clickable { vm.restoreAlerts() },
                             )
                         }
-                    }
-                    Button(
-                        onClick = { showAddDialog = true },
-                        shape = RoundedCornerShape(50),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MoneeColors.BrandYellow,
-                                contentColor = MoneeColors.InkDark,
-                            ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp),
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Add Budget", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -363,6 +346,26 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
                         onDelete = { deletingBudget = budget },
                     )
                 }
+            }
+        }
+
+        // Keep the main action reachable while the budget list scrolls behind it.
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(listOf(Color.Transparent, MoneeColors.CardWhite))
+                    )
+                    .navigationBarsPadding()
+                    .padding(top = 24.dp, bottom = 16.dp)
+        ) {
+            MoneeGradientButton(
+                onClick = { showAddDialog = true },
+                modifier =
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
+            ) {
+                Text("+ Add Budget", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }

@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 // 1. FINANCIAL REPORT DATA MODELS (MATCHING UML CLASS DIAGRAM)
 // ============================================================================
 enum class AnalyticsPeriod(val label: String) {
+    DAILY("Daily"),
     WEEKLY("Weekly"),
     MONTHLY("Monthly"),
     YEARLY("Yearly"),
@@ -67,7 +68,7 @@ enum class AnalyticsPeriod(val label: String) {
 data class FinancialReport(
     val reportId: String,
     val userId: String,
-    val reportType: String, // "WEEKLY" | "MONTHLY" | "YEARLY"
+    val reportType: String, // "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY"
     val startDate: LocalDate,
     val endDate: LocalDate,
     val totalIncome: Double,

@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.miniproject.ui.theme.MoneeBorder
 import com.example.miniproject.ui.theme.MoneeButtonBrush
+import com.example.miniproject.ui.theme.MoneeGradientButton
 import com.example.miniproject.ui.theme.MoneeInk
 import com.example.miniproject.ui.theme.MoneeMuted
 import java.time.LocalDate
@@ -152,68 +153,73 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
     var inviteChallengeId by remember { mutableStateOf<String?>(null) }
     var groupContribChallengeId by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier =
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(MoneeColors.CardWhite)
-                    .border(1.dp, MoneeBorder, RoundedCornerShape(50.dp))
-                    .padding(4.dp)
-        ) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                SavingsSubTab.values().forEach { sub ->
-                    val active = vm.savingsSubTab == sub
-                    Box(
-                        modifier =
-                            Modifier.weight(1f)
-                                .clip(RoundedCornerShape(50.dp))
-                                .then(
-                                    if (active) Modifier.background(MoneeButtonBrush)
-                                    else Modifier.background(Color.Transparent)
-                                )
-                                .clickable {
-                                    vm.savingsSubTab = sub
-                                    vm.selectedChallengeId = null
-                                }
-                                .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Text(
-                                sub.label,
-                                fontSize = 16.sp,
-                                fontWeight =
-                                    if (active) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (active) MoneeInk else MoneeMuted,
-                            )
-                            if (
-                                sub == SavingsSubTab.GROUP && vm.pendingInvitations.isNotEmpty()
-                            ) {
-                                Surface(
-                                    color = MoneeColors.WarningOrange,
-                                    shape = CircleShape,
-                                ) {
-                                    Text(
-                                        "${vm.pendingInvitations.size}",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier =
-                                            Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier =
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(MoneeColors.CardWhite)
+                        .border(1.dp, MoneeBorder, RoundedCornerShape(50.dp))
+                        .padding(4.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    SavingsSubTab.values().forEach { sub ->
+                        val active = vm.savingsSubTab == sub
+                        Box(
+                            modifier =
+                                Modifier.weight(1f)
+                                    .clip(RoundedCornerShape(50.dp))
+                                    .then(
+                                        if (active) Modifier.background(MoneeButtonBrush)
+                                        else Modifier.background(Color.Transparent)
                                     )
+                                    .clickable {
+                                        vm.savingsSubTab = sub
+                                        vm.selectedChallengeId = null
+                                    }
+                                    .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
+                                Text(
+                                    sub.label,
+                                    fontSize = 16.sp,
+                                    fontWeight =
+                                        if (active) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (active) MoneeInk else MoneeMuted,
+                                )
+                                if (
+                                    sub == SavingsSubTab.GROUP &&
+                                        vm.pendingInvitations.isNotEmpty()
+                                ) {
+                                    Surface(
+                                        color = MoneeColors.WarningOrange,
+                                        shape = CircleShape,
+                                    ) {
+                                        Text(
+                                            "${vm.pendingInvitations.size}",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier =
+                                                Modifier.padding(
+                                                    horizontal = 5.dp,
+                                                    vertical = 1.dp,
+                                                ),
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        if (vm.savingsSubTab == SavingsSubTab.PERSONAL) {
+            if (vm.savingsSubTab == SavingsSubTab.PERSONAL) {
             val totalTarget = vm.savingsGoals.sumOf { it.targetAmount }
             val totalSaved = vm.savingsGoals.sumOf { it.currentAmount }
             val overallPct =
@@ -221,7 +227,8 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding =
+                    PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
@@ -305,37 +312,12 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
                 }
 
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "YOUR GOALS (${vm.savingsGoals.size})",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MoneeColors.Slate500,
-                        )
-                        Button(
-                            onClick = { showAddGoalDialog = true },
-                            shape = RoundedCornerShape(50),
-                            colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor = MoneeColors.BrandYellow,
-                                    contentColor = MoneeColors.InkDark,
-                                ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            modifier = Modifier.height(34.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Add Goal", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    Text(
+                        "YOUR GOALS (${vm.savingsGoals.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MoneeColors.Slate500,
+                    )
                 }
 
                 items(vm.savingsGoals, key = { it.goalId }) { goal ->
@@ -545,6 +527,29 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
                             }
                         }
                     }
+                }
+            }
+            }
+        } // Content column
+
+        // Personal goals use the same persistent bottom action as Expenses.
+        if (vm.savingsSubTab == SavingsSubTab.PERSONAL) {
+            Box(
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(listOf(Color.Transparent, MoneeColors.CardWhite))
+                        )
+                        .navigationBarsPadding()
+                        .padding(top = 24.dp, bottom = 16.dp)
+            ) {
+                MoneeGradientButton(
+                    onClick = { showAddGoalDialog = true },
+                    modifier =
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
+                ) {
+                    Text("+ Add Goal", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
