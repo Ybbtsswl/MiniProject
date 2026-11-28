@@ -68,6 +68,13 @@ sealed class Screen(val route: String) {
     }
 }
 
+// Shared management tabs live with the app routes so navigation has one source of truth.
+enum class MoneeTab(val label: String) {
+    BUDGET("Budget"),
+    SAVINGS("Savings"),
+    ANALYTICS("Analytics"),
+}
+
 @Composable
 fun AppNavHost(
     navController: NavHostController,
@@ -189,8 +196,12 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.Dashboard.route) {
+        composable(Screen.Dashboard.route) { dashboardEntry ->
             val userId = supabaseClient.auth.currentUserOrNull()?.id
+            val requestedTab by
+                dashboardEntry.savedStateHandle
+                    .getStateFlow("dashboard_tab", 0)
+                    .collectAsState()
             val scope = rememberCoroutineScope()
             val signOut: () -> Unit = {
                 scope.launch {
@@ -203,6 +214,7 @@ fun AppNavHost(
 
             DashboardScreen(
                 userId = userId,
+                initialTab = requestedTab,
                 onAdd = {
                     userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
                 },
@@ -220,6 +232,9 @@ fun AppNavHost(
                 },
                 onSavings = { navController.navigate(Screen.Savings.route) },
                 onReports = { navController.navigate(Screen.Reports.route) },
+                onDashboardTabChanged = { tab ->
+                    dashboardEntry.savedStateHandle["dashboard_tab"] = tab
+                },
                 onAddSplitBill = {
                     userId?.let { navController.navigate(Screen.AddSplitBill.createRoute(it)) }
                 },
@@ -280,9 +295,27 @@ fun AppNavHost(
         }
 
         composable(Screen.Reports.route) {
+            fun returnToDashboard(tab: Int) {
+                runCatching {
+                    navController
+                        .getBackStackEntry(Screen.Dashboard.route)
+                        .savedStateHandle["dashboard_tab"] = tab
+                }
+                if (!navController.popBackStack(Screen.Dashboard.route, inclusive = false)) {
+                    navController.navigate(Screen.Dashboard.route)
+                }
+            }
+
+            val userId = supabaseClient.auth.currentUserOrNull()?.id
             FinancialReportScreen(
-                userId = supabaseClient.auth.currentUserOrNull()?.id,
-                onBack = { navController.popBackStack() }
+                userId = userId,
+                onBack = { navController.popBackStack() },
+                onHome = { returnToDashboard(0) },
+                onAdd = {
+                    userId?.let { navController.navigate(Screen.AddTransaction.createRoute(it)) }
+                },
+                onSplitBill = { returnToDashboard(2) },
+                onProfile = { returnToDashboard(3) },
             )
         }
 

@@ -56,6 +56,7 @@ private val IncomeOrange = Color(0xFFFF8A1F)
 @Composable
 fun DashboardScreen(
     userId: String? = null,
+    initialTab: Int = 0,
     onAdd: () -> Unit = {},
     onAddIncome: () -> Unit = {},
     onExpense: () -> Unit = {},
@@ -65,9 +66,11 @@ fun DashboardScreen(
     onBudget: () -> Unit = {},
     onSavings: () -> Unit = {},
     onReports: () -> Unit = {},
+    onDashboardTabChanged: (Int) -> Unit = {},
     onSignOut: () -> Unit = {}
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
+    LaunchedEffect(initialTab) { selectedTab = initialTab }
     var expenses by remember { mutableStateOf<List<Expense>>(emptyList()) }
     var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
     val repository = remember { ExpenseRepository() }
@@ -105,7 +108,13 @@ fun DashboardScreen(
             bottomBar = {
                 DashboardBottomBar(
                     selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it },
+                    onTabSelected = {
+                        if (it == 1) onReports()
+                        else {
+                            selectedTab = it
+                            onDashboardTabChanged(it)
+                        }
+                    },
                     onAdd = onAdd
                 )
             }
@@ -488,7 +497,7 @@ private fun QuickAction(
 }
 
 @Composable
-private fun DashboardBottomBar(
+fun DashboardBottomBar(
     selectedTab: Int, onTabSelected: (Int) -> Unit, onAdd: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().background(CardColor)) {
