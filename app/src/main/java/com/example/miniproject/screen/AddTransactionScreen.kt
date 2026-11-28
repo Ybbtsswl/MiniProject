@@ -78,6 +78,7 @@ fun AddTransactionScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var repeatIncome by remember { mutableStateOf(false) }
+    var recurringFrequency by remember { mutableStateOf("Monthly") }
     var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
     var scanError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -395,6 +396,18 @@ fun AddTransactionScreen(
                         )
                     )
                 }
+                if (repeatIncome) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Payment schedule", fontSize = 12.sp, color = MoneeMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Monthly", "Weekly").forEach { frequency ->
+                            MoneeChip(
+                                selected = recurringFrequency == frequency,
+                                onClick = { recurringFrequency = frequency }
+                            ) { Text(frequency, fontSize = 12.sp) }
+                        }
+                    }
+                }
             }
 
             if (isExpense) {
@@ -489,9 +502,33 @@ fun AddTransactionScreen(
                                     description = description.trim().ifEmpty { "" }
                                 )
                                 saveScope.launch {
-                                    incomeRepository.addIncome(newIncome)
+                                    val incomeToSave = if (repeatIncome) {
+                                        incomeRepository.addRecurringIncome(
+                                            userId = userId,
+                                            categoryId = selectedIncomeCategoryId,
+                                            amount = value,
+                                            startDate = formattedDate,
+                                            frequency = recurringFrequency
+                                        ).fold(
+                                            onSuccess = { recurring ->
+                                                Result.success(newIncome.copy(recurringIncomeId = recurring.recurringIncomeId))
+                                            },
+                                            onFailure = { Result.failure(it) }
+                                        )
+                                    } else {
+                                        Result.success(newIncome)
+                                    }
+
+                                    incomeToSave.fold(
+                                        onSuccess = { income -> incomeRepository.addIncome(income) },
+                                        onFailure = { Result.failure<Income>(it) }
+                                    )
                                         .onSuccess {
-                                            Toast.makeText(context, "Income saved", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                if (repeatIncome) "Recurring income saved" else "Income saved",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                             onSaveSuccess()
                                         }
                                         .onFailure {

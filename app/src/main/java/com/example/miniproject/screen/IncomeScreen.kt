@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -26,6 +28,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.miniproject.data.Income
 import com.example.miniproject.data.IncomeCategory
+import com.example.miniproject.data.RecurringIncome
 import com.example.miniproject.repository.IncomeRepository
 import com.example.miniproject.ui.theme.MoneeAmber
 import com.example.miniproject.ui.theme.MoneeBorder
@@ -61,8 +64,10 @@ fun IncomeScreen(
     var selectedTab by remember { mutableStateOf("All") }
     var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
     var categories by remember { mutableStateOf<List<IncomeCategory>>(emptyList()) }
+    var recurringIncomes by remember { mutableStateOf<List<RecurringIncome>>(emptyList()) }
     var selectedIncome by remember { mutableStateOf<Income?>(null) }
     var editingIncome by remember { mutableStateOf<Income?>(null) }
+    var recurringToStop by remember { mutableStateOf<RecurringIncome?>(null) }
     val incomeRepository = remember { IncomeRepository() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
@@ -72,6 +77,7 @@ fun IncomeScreen(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             incomes = incomeRepository.getIncome(userId).getOrDefault(emptyList())
             categories = incomeRepository.getIncomeCategories().getOrDefault(emptyList())
+            recurringIncomes = incomeRepository.getActiveRecurringIncome(userId).getOrDefault(emptyList())
         }
     }
 
@@ -101,21 +107,9 @@ fun IncomeScreen(
                         .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
                 )
                 .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MoneeInk)
-                }
-                Text("Income", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MoneeInk)
-                Spacer(modifier = Modifier.width(48.dp))
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(64.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,6 +143,38 @@ fun IncomeScreen(
             Spacer(modifier = Modifier.height(10.dp))
             categoryTotals.take(3).forEach { (name, amount) -> IncomeCategoryBar(name, amount, monthlyTotal) }
 
+            if (recurringIncomes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Text("Recurring income", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                Spacer(modifier = Modifier.height(8.dp))
+                recurringIncomes.forEach { recurring ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, MoneeBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(formatIncomeAmount(recurring.amount), fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                                Text(
+                                    "${recurring.frequency.replaceFirstChar { it.uppercase() }} · Next ${recurring.nextDate}",
+                                    fontSize = 12.sp,
+                                    color = MoneeMuted
+                                )
+                            }
+                            TextButton(onClick = { recurringToStop = recurring }) {
+                                Text("Stop", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -176,29 +202,44 @@ fun IncomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            LazyColumn(
-                modifier = Modifier.weight(1f),
+            Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
+                modifier = Modifier.padding(bottom = 100.dp)
             ) {
                 if (filteredIncomes.isEmpty()) {
-                    item { Text("No income records for this month", color = MoneeMuted, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp)) }
+                    Text("No income records for this month", color = MoneeMuted, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp))
                 } else {
                     val grouped = filteredIncomes.groupBy { incomeDisplayDate(it.incomeDate) }
                     grouped.forEach { (date, itemsList) ->
-                        item {
-                            Text(
-                                text = date,
-                                fontSize = 12.sp,
-                                color = MoneeMuted,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                        items(itemsList) { income ->
+                        Text(text = date, fontSize = 12.sp, color = MoneeMuted, modifier = Modifier.padding(top = 8.dp))
+                        itemsList.forEach { income ->
                             IncomeItemRow(income, categoryName(income)) { selectedIncome = income }
                         }
                     }
                 }
+            }
+        }
+
+        Box(
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .windowInsetsPadding(
+                        WindowInsets.systemBars.union(WindowInsets.displayCutout)
+                            .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+                    )
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MoneeInk)
+                }
+                Text("Income", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MoneeInk)
+                Spacer(modifier = Modifier.width(48.dp))
             }
         }
 
@@ -259,6 +300,34 @@ fun IncomeScreen(
             }
         )
     }
+
+    recurringToStop?.let { recurring ->
+        AlertDialog(
+            onDismissRequest = { recurringToStop = null },
+            title = { Text("Stop recurring income?") },
+            text = { Text("Future ${recurring.frequency} income entries will stop. Existing history will remain.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    recurringToStop = null
+                    scope.launch {
+                        incomeRepository.stopRecurringIncome(recurring.recurringIncomeId, userId)
+                            .onSuccess {
+                                recurringIncomes = recurringIncomes.filterNot {
+                                    it.recurringIncomeId == recurring.recurringIncomeId
+                                }
+                                Toast.makeText(context, "Recurring income stopped", Toast.LENGTH_SHORT).show()
+                            }
+                            .onFailure {
+                                Toast.makeText(context, it.message ?: "Unable to stop recurring income", Toast.LENGTH_LONG).show()
+                            }
+                    }
+                }) { Text("Stop", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { recurringToStop = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -312,7 +381,7 @@ private fun incomeDisplayDate(dateString: String): String {
 }
 
 @Composable
-private fun IncomeDetailDialog(
+internal fun IncomeDetailDialog(
     income: Income,
     categoryName: String,
     onDismiss: () -> Unit,
@@ -343,7 +412,7 @@ private fun IncomeDetailDialog(
 }
 
 @Composable
-private fun EditIncomeDialog(
+internal fun EditIncomeDialog(
     income: Income,
     categories: List<IncomeCategory>,
     onDismiss: () -> Unit,

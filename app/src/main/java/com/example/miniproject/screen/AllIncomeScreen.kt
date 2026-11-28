@@ -1,5 +1,6 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -30,6 +32,7 @@ import com.example.miniproject.ui.theme.moneeBackground
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 @Composable
 fun AllIncomeScreen(
@@ -41,8 +44,12 @@ fun AllIncomeScreen(
     var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
     var categories by remember { mutableStateOf<List<IncomeCategory>>(emptyList()) }
     var selectedMonth by remember(initialMonth) { mutableStateOf(initialMonth) }
+    var selectedIncome by remember { mutableStateOf<Income?>(null) }
+    var editingIncome by remember { mutableStateOf<Income?>(null) }
     val repository = remember { IncomeRepository() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(userId, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -108,7 +115,7 @@ fun AllIncomeScreen(
                             Text(date, fontSize = 12.sp, color = MoneeMuted, modifier = Modifier.padding(top = 8.dp))
                         }
                         items(dateIncomes) { income ->
-                            AllIncomeRow(income, categoryName(income))
+                            AllIncomeRow(income, categoryName(income)) { selectedIncome = income }
                         }
                     }
                 }
@@ -122,12 +129,58 @@ fun AllIncomeScreen(
             ) { Text("+ Add Income", fontWeight = FontWeight.SemiBold) }
         }
     }
+
+    selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            categoryName = categoryName(income),
+            onDismiss = { selectedIncome = null },
+            onEdit = {
+                selectedIncome = null
+                editingIncome = income
+            },
+            onDelete = {
+                selectedIncome = null
+                scope.launch {
+                    repository.deleteIncome(income.incomeId, userId)
+                        .onSuccess {
+                            incomes = incomes.filterNot { it.incomeId == income.incomeId }
+                            Toast.makeText(context, "Income deleted", Toast.LENGTH_SHORT).show()
+                        }
+                        .onFailure {
+                            Toast.makeText(context, it.message ?: "Unable to delete income", Toast.LENGTH_LONG).show()
+                        }
+                }
+            }
+        )
+    }
+
+    editingIncome?.let { income ->
+        EditIncomeDialog(
+            income = income,
+            categories = categories,
+            onDismiss = { editingIncome = null },
+            onSave = { updated ->
+                editingIncome = null
+                scope.launch {
+                    repository.updateIncome(updated)
+                        .onSuccess { saved ->
+                            incomes = incomes.map { if (it.incomeId == saved.incomeId) saved else it }
+                            Toast.makeText(context, "Income updated", Toast.LENGTH_SHORT).show()
+                        }
+                        .onFailure {
+                            Toast.makeText(context, it.message ?: "Unable to update income", Toast.LENGTH_LONG).show()
+                        }
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun AllIncomeRow(income: Income, categoryName: String) {
+private fun AllIncomeRow(income: Income, categoryName: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, MoneeBorder)
