@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,6 +43,7 @@ private val ProfilePeach = Color(0xFFFFDEB3)
 @Composable
 fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
     var profile by remember { mutableStateOf<Profile?>(null) }
+    var avatarUrl by remember { mutableStateOf<String?>(null) }
     var showImagePicker by remember { mutableStateOf(false) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -50,17 +52,24 @@ fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
 
     if (userId != null) {
         LaunchedEffect(userId) {
-            profile = repository.getById(userId).getOrNull()
+            repository.getById(userId).getOrNull()?.let { loadedProfile ->
+                profile = loadedProfile
+                avatarUrl = loadedProfile.avatarUrl
+            }
         }
     }
 
-    fun uploadAvatar(bytes: ByteArray, extension: String) {
+    fun uploadAvatar(bytes: ByteArray, extension: String, previewUrl: String? = null) {
         val currentUserId = userId ?: return
+        if (previewUrl != null) avatarUrl = previewUrl
         scope.launch {
             isUploadingAvatar = true
             repository.uploadAvatar(currentUserId, bytes, extension)
                 .onSuccess { url ->
+                    // Keep the local preview even if the profile query returned
+                    // no row, then refresh the image URL to avoid Coil cache.
                     profile = profile?.copy(avatarUrl = url)
+                    avatarUrl = "$url?avatarVersion=${System.currentTimeMillis()}"
                     Toast.makeText(context, "Profile picture updated", Toast.LENGTH_SHORT).show()
                 }
                 .onFailure { error ->
@@ -82,7 +91,7 @@ fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
         if (bytes != null) {
             val extension = context.contentResolver.getType(uri)
                 ?.substringAfter("/", "jpg") ?: "jpg"
-            uploadAvatar(bytes, extension)
+            uploadAvatar(bytes, extension, uri.toString())
         }
     }
 
@@ -108,7 +117,7 @@ fun ProfileScreen(userId: String?, onSignOut: () -> Unit) {
     ProfileContent(
         name = profile?.fullName?.ifBlank { null } ?: "Alex Morgan",
         email = profile?.email?.ifBlank { null } ?: "alex.morgan@gmail.com",
-        avatarUrl = profile?.avatarUrl,
+        avatarUrl = avatarUrl,
         isUploadingAvatar = isUploadingAvatar,
         onChangeAvatar = { showImagePicker = true },
         onSignOut = onSignOut
@@ -182,6 +191,7 @@ private fun ProfileContent(
                 AsyncImage(
                     model = avatarUrl,
                     contentDescription = "Profile picture",
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().clip(CircleShape)
                 )
             } else {
