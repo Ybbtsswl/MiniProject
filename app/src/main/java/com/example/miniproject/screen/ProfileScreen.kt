@@ -46,7 +46,7 @@ import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.ui.theme.MiniProjectTheme
 import com.example.miniproject.ui.theme.LocalThemeController
 import com.example.miniproject.ui.theme.ThemeMode
-import coil.compose.AsyncImage
+import coil.compose.AsyncImage as CoilAsyncImage
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
@@ -229,7 +229,7 @@ private fun ProfileContent(
                     strokeWidth = 3.dp
                 )
             } else if (!avatarUrl.isNullOrBlank()) {
-                AsyncImage(
+                CoilAsyncImage(
                     model = avatarUrl,
                     contentDescription = "Profile picture",
                     contentScale = ContentScale.Crop,
