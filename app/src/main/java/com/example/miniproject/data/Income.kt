@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 data class Income(
     @SerialName("income_id") val incomeId: String = "",
     @SerialName("user_id") val userId: String = "",
-    @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("income_category_id") val categoryId: String? = null,
     @SerialName("recurring_income_id") val recurringIncomeId: String? = null,
     val amount: Double = 0.0,
     @SerialName("income_date") val incomeDate: String = "",

@@ -1,5 +1,7 @@
 package com.example.miniproject.screen
 
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,21 +20,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.miniproject.data.Category
 import com.example.miniproject.data.Income
-import com.example.miniproject.repository.ExpenseRepository
+import com.example.miniproject.data.IncomeCategory
 import com.example.miniproject.repository.IncomeRepository
 import com.example.miniproject.ui.theme.MoneeAmber
 import com.example.miniproject.ui.theme.MoneeBorder
+import com.example.miniproject.ui.theme.MoneeButtonBrush
 import com.example.miniproject.ui.theme.MoneeGreen
 import com.example.miniproject.ui.theme.MoneeInk
 import com.example.miniproject.ui.theme.MoneeMuted
 import com.example.miniproject.ui.theme.MoneeYellow
 import com.example.miniproject.ui.theme.moneeBackground
 import com.example.miniproject.ui.theme.moneeHero
+import com.example.miniproject.ui.theme.MoneeChip
+import com.example.miniproject.ui.theme.MoneeGradientButton
+import com.example.miniproject.ui.theme.moneeFieldColors
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.YearMonth
@@ -45,15 +54,18 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
     var selectedMonth by remember { mutableStateOf(YearMonth.now().toString()) }
     var selectedTab by remember { mutableStateOf("All") }
     var incomes by remember { mutableStateOf<List<Income>>(emptyList()) }
-    var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    var categories by remember { mutableStateOf<List<IncomeCategory>>(emptyList()) }
+    var selectedIncome by remember { mutableStateOf<Income?>(null) }
+    var editingIncome by remember { mutableStateOf<Income?>(null) }
     val incomeRepository = remember { IncomeRepository() }
-    val categoryRepository = remember { ExpenseRepository() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(userId, selectedMonth, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             incomes = incomeRepository.getIncome(userId).getOrDefault(emptyList())
-            categories = categoryRepository.getCategories(userId).getOrDefault(emptyList())
+            categories = incomeRepository.getIncomeCategories().getOrDefault(emptyList())
         }
     }
 
@@ -63,7 +75,7 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
     val monthIncomes = incomes.filter { it.incomeDate.startsWith(selectedMonth) }
     val monthlyTotal = monthIncomes.sumOf { it.amount }
     val categoryName: (Income) -> String = { income ->
-        categories.firstOrNull { it.categoryId == income.categoryId }?.name
+        categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.name
             ?: income.categoryId?.takeIf { it.isNotBlank() }?.take(8)
             ?: "Other"
     }
@@ -152,7 +164,20 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
                 if (filteredIncomes.isEmpty()) {
                     item { Text("No income records for this month", color = MoneeMuted, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp)) }
                 } else {
-                    items(filteredIncomes) { income -> IncomeItemRow(income, categoryName(income)) }
+                    val grouped = filteredIncomes.groupBy { incomeDisplayDate(it.incomeDate) }
+                    grouped.forEach { (date, itemsList) ->
+                        item {
+                            Text(
+                                text = date,
+                                fontSize = 12.sp,
+                                color = MoneeMuted,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                        items(itemsList) { income ->
+                            IncomeItemRow(income, categoryName(income)) { selectedIncome = income }
+                        }
+                    }
                 }
             }
         }
@@ -162,13 +187,57 @@ fun IncomeScreen(userId: String, onBack: () -> Unit, onAddIncome: () -> Unit) {
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.White)))
                 .navigationBarsPadding().padding(top = 24.dp, bottom = 16.dp)
         ) {
-            Button(
+            MoneeGradientButton(
                 onClick = onAddIncome,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MoneeAmber, contentColor = MoneeInk)
             ) { Text("+ Add Income", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
         }
+    }
+
+    selectedIncome?.let { income ->
+        IncomeDetailDialog(
+            income = income,
+            categoryName = categoryName(income),
+            onDismiss = { selectedIncome = null },
+            onEdit = {
+                selectedIncome = null
+                editingIncome = income
+            },
+            onDelete = {
+                selectedIncome = null
+                scope.launch {
+                    incomeRepository.deleteIncome(income.incomeId, userId)
+                        .onSuccess {
+                            incomes = incomes.filterNot { it.incomeId == income.incomeId }
+                            Toast.makeText(context, "Income deleted", Toast.LENGTH_SHORT).show()
+                        }
+                        .onFailure {
+                            Toast.makeText(context, it.message ?: "Unable to delete income", Toast.LENGTH_LONG).show()
+                        }
+                }
+            }
+        )
+    }
+
+    editingIncome?.let { income ->
+        EditIncomeDialog(
+            income = income,
+            categories = categories,
+            onDismiss = { editingIncome = null },
+            onSave = { updated ->
+                editingIncome = null
+                scope.launch {
+                    incomeRepository.updateIncome(updated)
+                        .onSuccess { saved ->
+                            incomes = incomes.map { if (it.incomeId == saved.incomeId) saved else it }
+                            Toast.makeText(context, "Income updated", Toast.LENGTH_SHORT).show()
+                        }
+                        .onFailure {
+                            Toast.makeText(context, it.message ?: "Unable to update income", Toast.LENGTH_LONG).show()
+                        }
+                }
+            }
+        )
     }
 }
 
@@ -182,21 +251,142 @@ private fun IncomeCategoryBar(label: String, amount: Double, total: Double) {
         }
         Spacer(modifier = Modifier.height(4.dp))
         Box(modifier = Modifier.fillMaxWidth().height(8.dp).background(Color.White, RoundedCornerShape(8.dp))) {
-            Box(modifier = Modifier.fillMaxWidth(percentage / 100f).fillMaxHeight().background(MoneeAmber, RoundedCornerShape(8.dp)))
+            Box(modifier = Modifier.fillMaxWidth(percentage / 100f).fillMaxHeight().background(MoneeButtonBrush, RoundedCornerShape(8.dp)))
         }
     }
 }
 
 @Composable
-private fun IncomeItemRow(income: Income, categoryName: String) {
-    Row(modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(16.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(categoryName, color = MoneeInk, fontWeight = FontWeight.SemiBold)
-            Text(income.description.ifBlank { "Income" }, color = MoneeMuted, fontSize = 12.sp)
-            Text(income.incomeDate, color = MoneeMuted, fontSize = 11.sp)
+private fun IncomeItemRow(income: Income, categoryName: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, MoneeBorder)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(categoryName, color = MoneeInk, fontWeight = FontWeight.SemiBold)
+                Text(income.description.ifBlank { "Income" }, color = MoneeMuted, fontSize = 12.sp)
+            }
+            Text("+${formatIncomeAmount(income.amount)}", color = MoneeInk, fontWeight = FontWeight.Bold)
         }
-        Text("+${formatIncomeAmount(income.amount)}", color = MoneeInk, fontWeight = FontWeight.Bold)
     }
+}
+
+private fun incomeDisplayDate(dateString: String): String {
+    return try {
+        val date = LocalDate.parse(dateString)
+        val today = LocalDate.now()
+        when {
+            date == today -> "Today"
+            date == today.minusDays(1) -> "Yesterday"
+            else -> date.format(DateTimeFormatter.ofPattern("EEEE, d MMM yyyy"))
+        }
+    } catch (_: Exception) {
+        dateString
+    }
+}
+
+@Composable
+private fun IncomeDetailDialog(
+    income: Income,
+    categoryName: String,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Income Details", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(formatIncomeAmount(income.amount), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MoneeAmber)
+                Text("Category: $categoryName")
+                Text("Description: ${income.description.ifBlank { "–" }}")
+                Text("Date: ${income.incomeDate}")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onEdit) { Text("Edit") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        }
+    )
+}
+
+@Composable
+private fun EditIncomeDialog(
+    income: Income,
+    categories: List<IncomeCategory>,
+    onDismiss: () -> Unit,
+    onSave: (Income) -> Unit
+) {
+    var amount by remember { mutableStateOf(income.amount.toString()) }
+    var description by remember { mutableStateOf(income.description) }
+    var date by remember { mutableStateOf(income.incomeDate) }
+    var selectedCategoryId by remember { mutableStateOf(income.categoryId) }
+    val valid = amount.toDoubleOrNull()?.let { it > 0 } == true &&
+        date.isNotBlank() && selectedCategoryId != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Income", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Amount") },
+                    leadingIcon = { Text("RM") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    colors = moneeFieldColors()
+                )
+                Text("Category", fontWeight = FontWeight.Medium)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(categories) { category ->
+                        MoneeChip(
+                            selected = selectedCategoryId == category.incomeCategoryId,
+                            onClick = { selectedCategoryId = category.incomeCategoryId }
+                        ) { Text("${category.icon ?: "•"} ${category.name}") }
+                    }
+                }
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    singleLine = true,
+                    colors = moneeFieldColors()
+                )
+                OutlinedTextField(
+                    value = date,
+                    onValueChange = { date = it },
+                    label = { Text("Date (YYYY-MM-DD)") },
+                    singleLine = true,
+                    colors = moneeFieldColors()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                onSave(income.copy(
+                    amount = amount.toDouble(),
+                    categoryId = selectedCategoryId,
+                    incomeDate = date,
+                    description = description.trim()
+                ))
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 private fun incomeChangeText(incomes: List<Income>, month: String): String {
