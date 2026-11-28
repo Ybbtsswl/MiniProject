@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -14,6 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.miniproject.MoneeTab
 import com.example.miniproject.screen.management.*
 import com.example.miniproject.ui.theme.moneeBackground
+import com.example.miniproject.viewmodel.ExpenseViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -63,6 +65,11 @@ private fun FinanceManagementScreen(
     val budget: BudgetViewModel = viewModel(key = "management-budget-$userId")
     val savings: SavingsViewModel = viewModel(key = "management-savings-$userId")
     val reports: FinancialReportViewModel = viewModel(key = "management-reports-$userId")
+    val categoriesViewModel: ExpenseViewModel = viewModel(key = "shared-categories-$userId")
+    val categories by categoriesViewModel.categories.collectAsState()
+    val isLoadingCategories by categoriesViewModel.isLoadingCategories.collectAsState()
+    var showAddBudget by rememberSaveable { mutableStateOf(false) }
+    var showAddGoal by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
@@ -95,6 +102,7 @@ private fun FinanceManagementScreen(
             }
         }
     }
+    LaunchedEffect(userId) { categoriesViewModel.loadCategories(userId) }
     Box(Modifier.fillMaxSize().moneeBackground()) {
         Scaffold(
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -122,7 +130,15 @@ private fun FinanceManagementScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = {
+                            when {
+                                showAddBudget -> showAddBudget = false
+                                showAddGoal -> showAddGoal = false
+                                else -> onBack()
+                            }
+                        }
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -131,10 +147,15 @@ private fun FinanceManagementScreen(
                     }
                     Text(
                         text =
-                            when (initialTab) {
-                                MoneeTab.BUDGET -> "Budget Management"
-                                MoneeTab.SAVINGS -> "Savings Management"
-                                MoneeTab.ANALYTICS -> "Analytics & Reports"
+                            when {
+                                showAddBudget -> "Add Budget"
+                                showAddGoal -> "Add Goal"
+                                else ->
+                                    when (initialTab) {
+                                        MoneeTab.BUDGET -> "Budget Management"
+                                        MoneeTab.SAVINGS -> "Savings Management"
+                                        MoneeTab.ANALYTICS -> "Analytics & Reports"
+                                    }
                             },
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -146,8 +167,39 @@ private fun FinanceManagementScreen(
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                 when (initialTab) {
-                    MoneeTab.BUDGET -> BudgetManagementScreen(budget, message)
-                    MoneeTab.SAVINGS -> SavingsManagementScreen(savings, message)
+                    MoneeTab.BUDGET ->
+                        if (showAddBudget) {
+                            AddBudgetScreen(
+                                vm = budget,
+                                userId = userId,
+                                categories = categories,
+                                isLoadingCategories = isLoadingCategories,
+                                categoryViewModel = categoriesViewModel,
+                                onBack = { showAddBudget = false },
+                                showMessage = message,
+                            )
+                        } else {
+                            BudgetManagementScreen(
+                                vm = budget,
+                                categories = categories,
+                                showMessage = message,
+                                onAddBudget = { showAddBudget = true },
+                            )
+                        }
+                    MoneeTab.SAVINGS ->
+                        if (showAddGoal) {
+                            AddSavingsGoalScreen(
+                                vm = savings,
+                                onBack = { showAddGoal = false },
+                                showMessage = message,
+                            )
+                        } else {
+                            SavingsManagementScreen(
+                                vm = savings,
+                                showMessage = message,
+                                onAddGoal = { showAddGoal = true },
+                            )
+                        }
                     MoneeTab.ANALYTICS ->
                         AnalyticsReportsScreen(
                             reports,

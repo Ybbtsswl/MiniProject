@@ -60,7 +60,13 @@ val MoneeGreenBrush: Brush = Brush.horizontalGradient(
 
 val MoneeCardBorder = BorderStroke(1.dp, MoneeBorder)
 
-fun Modifier.moneeBackground(): Modifier = background(MoneeScreenBrush)
+@Composable
+fun Modifier.moneeBackground(): Modifier =
+    if (MaterialTheme.colorScheme.background == MoneeCream) {
+        background(MoneeScreenBrush)
+    } else {
+        background(MaterialTheme.colorScheme.background)
+    }
 
 fun Modifier.moneeHero(shape: Shape = RoundedCornerShape(20.dp)): Modifier =
     clip(shape).background(MoneeHeroBrush)
@@ -78,8 +84,8 @@ fun moneeFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = MoneeAmber,
     unfocusedLabelColor = MoneeMuted,
     cursorColor = MoneeAmber,
-    focusedTextColor = MoneeInk,
-    unfocusedTextColor = MoneeInk
+    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
 )
 
 @Composable

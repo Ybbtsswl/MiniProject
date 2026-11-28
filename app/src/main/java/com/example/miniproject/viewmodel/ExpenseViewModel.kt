@@ -226,4 +226,31 @@ class ExpenseViewModel : ViewModel() {
         }
     }
 
+    fun addCategory(
+        userId: String,
+        name: String,
+        icon: String,
+        onComplete: (Result<Category>) -> Unit,
+    ) {
+        viewModelScope.launch {
+            if (_categories.value.any { it.name.trim().equals(name.trim(), ignoreCase = true) }) {
+                onComplete(Result.failure(IllegalArgumentException("This category already exists.")))
+                return@launch
+            }
+            val category = runCatching { Category.userCreated(userId, name, icon) }
+            if (category.isFailure) {
+                onComplete(Result.failure(category.exceptionOrNull()!!))
+                return@launch
+            }
+
+            repository.addCategory(category.getOrThrow())
+                .onSuccess { saved ->
+                    _categories.value =
+                        (_categories.value + saved).distinctBy { it.categoryId.ifBlank { it.name } }
+                    onComplete(Result.success(saved))
+                }
+                .onFailure { onComplete(Result.failure(it)) }
+        }
+    }
+
 }

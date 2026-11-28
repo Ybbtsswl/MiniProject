@@ -27,7 +27,28 @@ class ExpenseRepository {
                 val result = supabase.from(categoryTable)
                     .select()
                     .decodeList<Category>()
-                Result.success(result)
+                // Keep shared rows (null owner) and the signed-in user's custom rows.
+                val visible = result.filter { it.userId == null || it.userId == userId }
+                Result.success(visible)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    /** Adds a reusable category that can be selected by Expenses and Budget Management. */
+    suspend fun addCategory(category: Category): Result<Category> =
+        withContext(Dispatchers.IO) {
+            try {
+                val payload = buildJsonObject {
+                    put("name", category.name)
+                    put("icon", category.icon ?: "•")
+                    category.description?.let { put("description", it) }
+                    category.userId?.let { put("user_id", it) }
+                }
+                val saved = supabase.from(categoryTable)
+                    .insert(payload) { select() }
+                    .decodeSingle<Category>()
+                Result.success(saved)
             } catch (e: Exception) {
                 Result.failure(e)
             }

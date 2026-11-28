@@ -142,9 +142,12 @@ fun computeSavingGoalStatus(currentAmount: Double, targetAmount: Double, deadlin
 // 3. SAVINGS MANAGEMENT SCREEN & DIALOGS
 // ============================================================================
 @Composable
-fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit) {
+fun SavingsManagementScreen(
+    vm: SavingsViewModel,
+    showMessage: (String) -> Unit,
+    onAddGoal: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
-    var showAddGoalDialog by remember { mutableStateOf(false) }
     var editingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var deletingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var detailsGoalId by remember { mutableStateOf<String?>(null) }
@@ -545,7 +548,7 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
                         .padding(top = 24.dp, bottom = 16.dp)
             ) {
                 MoneeGradientButton(
-                    onClick = { showAddGoalDialog = true },
+                    onClick = onAddGoal,
                     modifier =
                         Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
                 ) {
@@ -553,29 +556,6 @@ fun SavingsManagementScreen(vm: SavingsViewModel, showMessage: (String) -> Unit)
                 }
             }
         }
-    }
-
-    if (showAddGoalDialog) {
-        SavingsGoalFormDialog(
-            title = "Add Savings Goal",
-            confirmText = "Add Savings Goal",
-            initial = null,
-            onDismiss = { showAddGoalDialog = false },
-            onSave = { name, desc, target, start, dl ->
-                scope.launch {
-                    try {
-                        vm.addSavingsGoal(name, desc, target, start, dl)
-                            .onSuccess {
-                                showAddGoalDialog = false
-                                showMessage(it)
-                            }
-                            .onFailure { showMessage(it.message ?: "Invalid input") }
-                    } catch (error: Exception) {
-                        showMessage(error.message ?: "Unable to save changes.")
-                    }
-                }
-            },
-        )
     }
 
     editingGoal?.let { g ->
@@ -1056,6 +1036,184 @@ fun GroupChallengeDetailContent(
                         trackColor = MoneeColors.Slate100,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Full-page flow for creating a personal savings goal. */
+@Composable
+fun AddSavingsGoalScreen(
+    vm: SavingsViewModel,
+    onBack: () -> Unit,
+    showMessage: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var targetAmount by remember { mutableStateOf("") }
+    var startDate by remember { mutableStateOf(LocalDate.now().toString()) }
+    var deadline by remember { mutableStateOf(LocalDate.now().plusMonths(6).toString()) }
+    var isSaving by remember { mutableStateOf(false) }
+
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var amountError by remember { mutableStateOf<String?>(null) }
+    var startDateError by remember { mutableStateOf<String?>(null) }
+    var deadlineError by remember { mutableStateOf<String?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 112.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                "Set a target and deadline. You can add contributions after the goal is created.",
+                color = MoneeColors.Slate500,
+                fontSize = 13.sp,
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    nameError = null
+                },
+                label = { Text("Goal name") },
+                placeholder = { Text("Example: Emergency fund") },
+                isError = nameError != null,
+                supportingText = nameError?.let { message -> { Text(message) } },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Description (optional)") },
+                placeholder = { Text("What are you saving for?") },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = targetAmount,
+                onValueChange = {
+                    targetAmount = it
+                    amountError = null
+                },
+                label = { Text("Target amount (RM)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = amountError != null,
+                supportingText = amountError?.let { message -> { Text(message) } },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = startDate,
+                onValueChange = {
+                    startDate = it
+                    startDateError = null
+                    deadlineError = null
+                },
+                label = { Text("Start date") },
+                placeholder = { Text("YYYY-MM-DD") },
+                isError = startDateError != null,
+                supportingText = {
+                    Text(startDateError ?: "Use YYYY-MM-DD")
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = deadline,
+                onValueChange = {
+                    deadline = it
+                    deadlineError = null
+                },
+                label = { Text("Deadline") },
+                placeholder = { Text("YYYY-MM-DD") },
+                isError = deadlineError != null,
+                supportingText = {
+                    Text(deadlineError ?: "Use YYYY-MM-DD")
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            saveError?.let { Text(it, color = MoneeColors.DangerRed, fontSize = 13.sp) }
+        }
+
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(listOf(Color.Transparent, MoneeColors.CardWhite))
+                    )
+                    .navigationBarsPadding()
+                    .padding(top = 24.dp, bottom = 16.dp)
+        ) {
+            MoneeGradientButton(
+                enabled = !isSaving,
+                onClick = {
+                    val parsedAmount = targetAmount.toDoubleOrNull()
+                    val parsedStart = runCatching { LocalDate.parse(startDate) }.getOrNull()
+                    val parsedDeadline = runCatching { LocalDate.parse(deadline) }.getOrNull()
+
+                    nameError = if (name.isBlank()) "Enter a goal name." else null
+                    amountError =
+                        if (parsedAmount == null || parsedAmount <= 0) {
+                            "Enter a positive target amount."
+                        } else {
+                            null
+                        }
+                    startDateError =
+                        if (parsedStart == null) "Enter a valid start date." else null
+                    deadlineError =
+                        when {
+                            parsedDeadline == null -> "Enter a valid deadline."
+                            parsedStart != null && parsedDeadline.isBefore(parsedStart) ->
+                                "Deadline must be on or after the start date."
+                            else -> null
+                        }
+
+                    if (
+                        nameError == null && amountError == null && startDateError == null &&
+                            deadlineError == null
+                    ) {
+                        isSaving = true
+                        saveError = null
+                        scope.launch {
+                            vm.addSavingsGoal(
+                                    name,
+                                    description,
+                                    parsedAmount!!,
+                                    startDate,
+                                    deadline,
+                                )
+                                .onSuccess {
+                                    isSaving = false
+                                    showMessage(it)
+                                    onBack()
+                                }
+                                .onFailure {
+                                    isSaving = false
+                                    saveError = it.message ?: "Unable to save goal."
+                                }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
+            ) {
+                Text(
+                    if (isSaving) "Saving..." else "Add Goal",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

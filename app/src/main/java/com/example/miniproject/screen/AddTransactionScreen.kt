@@ -81,6 +81,9 @@ fun AddTransactionScreen(
     var recurringFrequency by remember { mutableStateOf("Monthly") }
     var scanNotes by remember { mutableStateOf<List<String>>(emptyList()) }
     var scanError by remember { mutableStateOf<String?>(null) }
+    var showAddCategory by remember { mutableStateOf(false) }
+    var isSavingCategory by remember { mutableStateOf(false) }
+    var categorySaveError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val incomeRepository = remember { IncomeRepository() }
     val saveScope = rememberCoroutineScope()
@@ -285,21 +288,16 @@ fun AddTransactionScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             if (isExpense) {
-                if (isLoadingCategories) {
-                    Text(text = "Loading categories...", fontSize = 13.sp, color = MoneeMuted)
-                } else if (categories.isEmpty()) {
-                    Text(text = "No categories found", fontSize = 13.sp, color = MoneeMuted)
-                } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(categories) { cat ->
-                            CategoryChip(
-                                category = cat,
-                                selected = selectedCategoryId == cat.categoryId,
-                                onClick = { selectedCategoryId = cat.categoryId }
-                            )
-                        }
-                    }
-                }
+                CategorySelector(
+                    categories = categories,
+                    selectedCategoryId = selectedCategoryId,
+                    isLoading = isLoadingCategories,
+                    onSelect = { selectedCategoryId = it.categoryId },
+                    onAddCategory = {
+                        categorySaveError = null
+                        showAddCategory = true
+                    },
+                )
             } else {
                 when {
                     isLoadingIncomeCategories -> {
@@ -606,6 +604,34 @@ fun AddTransactionScreen(
                 )
             )
         }
+    }
+
+    if (showAddCategory) {
+        AddCategoryDialog(
+            isSaving = isSavingCategory,
+            error = categorySaveError,
+            onDismiss = { if (!isSavingCategory) showAddCategory = false },
+            onSave = { name, icon ->
+                val ownerId = userId
+                if (ownerId == null) {
+                    categorySaveError = "Please sign in before adding a category."
+                } else {
+                    isSavingCategory = true
+                    categorySaveError = null
+                    viewModel.addCategory(ownerId, name, icon) { result ->
+                        isSavingCategory = false
+                        result
+                            .onSuccess { saved ->
+                                selectedCategoryId = saved.categoryId
+                                showAddCategory = false
+                            }
+                            .onFailure {
+                                categorySaveError = it.message ?: "Unable to add category."
+                            }
+                    }
+                }
+            },
+        )
     }
 }
 

@@ -25,7 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
+import androidx.compose.material3.RadioButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
@@ -44,6 +44,8 @@ import com.example.miniproject.data.Profile
 import com.example.miniproject.repository.ProfileRepository
 import com.example.miniproject.repository.AuthRepository
 import com.example.miniproject.ui.theme.MiniProjectTheme
+import com.example.miniproject.ui.theme.LocalThemeController
+import com.example.miniproject.ui.theme.ThemeMode
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -308,6 +310,7 @@ private fun ProfileSettingsScreen(
     val scope = rememberCoroutineScope()
     val profileRepository = remember { ProfileRepository() }
     val authRepository = remember { AuthRepository() }
+    val themeController = LocalThemeController.current
     var name by remember(profile?.fullName) { mutableStateOf(profile?.fullName.orEmpty()) }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -380,17 +383,53 @@ private fun ProfileSettingsScreen(
         ) {
             Text("PREFERENCES & SECURITY", color = ProfileText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFFFFBEA)).padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFFFFBEA)).padding(12.dp)
             ) {
-                Text("🌙", fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Dark mode", color = ProfileText, fontSize = 15.sp)
-                    Text("Use a darker app appearance", color = ProfileMuted, fontSize = 12.sp)
+                Text("🎨  App theme", color = ProfileText, fontSize = 15.sp)
+                Text(
+                    "Choose an appearance or follow your phone setting",
+                    color = ProfileMuted,
+                    fontSize = 12.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                .clickable { themeController.setMode(mode) }
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = themeController.mode == mode,
+                            onClick = { themeController.setMode(mode) },
+                        )
+                        Column {
+                            Text(
+                                when (mode) {
+                                    ThemeMode.LIGHT -> "Light mode"
+                                    ThemeMode.DARK -> "Dark mode"
+                                    ThemeMode.SYSTEM -> "Use phone setting"
+                                },
+                                color = ProfileText,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                when (mode) {
+                                    ThemeMode.LIGHT -> "Always use the light appearance"
+                                    ThemeMode.DARK -> "Always use the dark appearance"
+                                    ThemeMode.SYSTEM -> "Change with your phone's theme"
+                                },
+                                color = ProfileMuted,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
                 }
-                Switch(checked = darkMode, onCheckedChange = null, enabled = false)
             }
             Spacer(Modifier.height(10.dp))
             Row(

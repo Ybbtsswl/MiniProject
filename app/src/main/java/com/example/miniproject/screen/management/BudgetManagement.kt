@@ -31,7 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.miniproject.data.Category
+import com.example.miniproject.screen.AddCategoryDialog
+import com.example.miniproject.screen.CategorySelector
 import com.example.miniproject.ui.theme.MoneeGradientButton
+import com.example.miniproject.viewmodel.ExpenseViewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.Locale
@@ -96,9 +100,13 @@ fun computeBudgetStatus(spent: Double, limit: Double): String {
 // 3. BUDGET MANAGEMENT SCREEN & DIALOGS
 // ============================================================================
 @Composable
-fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
+fun BudgetManagementScreen(
+    vm: BudgetViewModel,
+    categories: List<Category>,
+    showMessage: (String) -> Unit,
+    onAddBudget: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
-    var showAddDialog by remember { mutableStateOf(false) }
     var editingBudget by remember { mutableStateOf<Budget?>(null) }
     var deletingBudget by remember { mutableStateOf<Budget?>(null) }
     var detailsBudgetId by remember { mutableStateOf<String?>(null) }
@@ -361,7 +369,7 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
                     .padding(top = 24.dp, bottom = 16.dp)
         ) {
             MoneeGradientButton(
-                onClick = { showAddDialog = true },
+                onClick = onAddBudget,
                 modifier =
                     Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
             ) {
@@ -370,34 +378,12 @@ fun BudgetManagementScreen(vm: BudgetViewModel, showMessage: (String) -> Unit) {
         }
     }
 
-    if (showAddDialog) {
-        BudgetFormDialog(
-            title = "Add New Budget",
-            confirmText = "Add Budget",
-            initial = null,
-            onDismiss = { showAddDialog = false },
-            onSave = { name, amount, cat, start, end ->
-                scope.launch {
-                    try {
-                        vm.addBudget(name, amount, cat, start, end)
-                            .onSuccess {
-                                showAddDialog = false
-                                showMessage(it)
-                            }
-                            .onFailure { showMessage(it.message ?: "Invalid input") }
-                    } catch (error: Exception) {
-                        showMessage(error.message ?: "Unable to save changes.")
-                    }
-                }
-            },
-        )
-    }
-
     editingBudget?.let { b ->
         BudgetFormDialog(
             title = "Edit Budget",
             confirmText = "Save Changes",
             initial = b,
+            categories = categories,
             onDismiss = { editingBudget = null },
             onSave = { name, amount, cat, start, end ->
                 scope.launch {
@@ -629,17 +615,259 @@ fun BudgetCardItem(
     }
 }
 
+/** Full-page create flow. Editing remains a compact dialog from an existing budget card. */
+@Composable
+fun AddBudgetScreen(
+    vm: BudgetViewModel,
+    userId: String?,
+    categories: List<Category>,
+    isLoadingCategories: Boolean,
+    categoryViewModel: ExpenseViewModel,
+    onBack: () -> Unit,
+    showMessage: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
+    var startDate by remember {
+        mutableStateOf(LocalDate.now().withDayOfMonth(1).toString())
+    }
+    var endDate by remember {
+        mutableStateOf(java.time.YearMonth.now().atEndOfMonth().toString())
+    }
+    var isSaving by remember { mutableStateOf(false) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var amountError by remember { mutableStateOf<String?>(null) }
+    var selectionError by remember { mutableStateOf<String?>(null) }
+    var startDateError by remember { mutableStateOf<String?>(null) }
+    var endDateError by remember { mutableStateOf<String?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var showAddCategory by remember { mutableStateOf(false) }
+    var isSavingCategory by remember { mutableStateOf(false) }
+    var addCategoryError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(categories) {
+        if (selectedCategoryId == null) {
+            selectedCategoryId = categories.firstOrNull()?.categoryId
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 112.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                "Create a monthly spending limit and track it against your expenses.",
+                color = MoneeColors.Slate500,
+                fontSize = 13.sp,
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it
+                    nameError = null
+                },
+                label = { Text("Budget name") },
+                placeholder = { Text("Example: Monthly food budget") },
+                isError = nameError != null,
+                supportingText = nameError?.let { message -> { Text(message) } },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = amount,
+                onValueChange = {
+                    amount = it
+                    amountError = null
+                },
+                label = { Text("Budget amount (RM)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = amountError != null,
+                supportingText = amountError?.let { message -> { Text(message) } },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val selectedName =
+                    categories.firstOrNull { it.categoryId == selectedCategoryId }?.name
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Category", fontWeight = FontWeight.SemiBold)
+                    selectedName?.let {
+                        Text(
+                            "Selected: $it",
+                            color = MoneeColors.BrandDarkGold,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+                CategorySelector(
+                    categories = categories,
+                    selectedCategoryId = selectedCategoryId,
+                    isLoading = isLoadingCategories,
+                    onSelect = {
+                        selectedCategoryId = it.categoryId
+                        selectionError = null
+                    },
+                    onAddCategory = {
+                        addCategoryError = null
+                        showAddCategory = true
+                    },
+                )
+                selectionError?.let {
+                    Text(it, color = MoneeColors.DangerRed, fontSize = 12.sp)
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = startDate,
+                    onValueChange = {
+                        startDate = it
+                        startDateError = null
+                        endDateError = null
+                    },
+                    label = { Text("Start date") },
+                    isError = startDateError != null,
+                    supportingText = { Text(startDateError ?: "YYYY-MM-DD") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = endDate,
+                    onValueChange = {
+                        endDate = it
+                        endDateError = null
+                    },
+                    label = { Text("End date") },
+                    isError = endDateError != null,
+                    supportingText = { Text(endDateError ?: "YYYY-MM-DD") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            saveError?.let { Text(it, color = MoneeColors.DangerRed, fontSize = 13.sp) }
+        }
+
+        Box(
+            modifier =
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(listOf(Color.Transparent, MoneeColors.CardWhite))
+                    )
+                    .navigationBarsPadding()
+                    .padding(top = 24.dp, bottom = 16.dp)
+        ) {
+            MoneeGradientButton(
+                enabled = !isSaving,
+                onClick = {
+                    val selected = categories.firstOrNull { it.categoryId == selectedCategoryId }
+                    val parsedAmount = amount.toDoubleOrNull()
+                    val parsedStart = runCatching { LocalDate.parse(startDate) }.getOrNull()
+                    val parsedEnd = runCatching { LocalDate.parse(endDate) }.getOrNull()
+
+                    nameError = if (name.isBlank()) "Enter a budget name." else null
+                    amountError =
+                        if (parsedAmount == null || parsedAmount <= 0) {
+                            "Enter a positive budget amount."
+                        } else {
+                            null
+                        }
+                    selectionError = if (selected == null) "Choose a category." else null
+                    startDateError =
+                        if (parsedStart == null) "Enter a valid start date." else null
+                    endDateError =
+                        when {
+                            parsedEnd == null -> "Enter a valid end date."
+                            parsedStart != null && parsedEnd.isBefore(parsedStart) ->
+                                "End date must be on or after the start date."
+                            else -> null
+                        }
+
+                    if (
+                        nameError == null && amountError == null && selectionError == null &&
+                            startDateError == null && endDateError == null
+                    ) {
+                            isSaving = true
+                            saveError = null
+                            scope.launch {
+                                vm.addBudget(name, parsedAmount!!, selected!!.name, startDate, endDate)
+                                    .onSuccess {
+                                        isSaving = false
+                                        showMessage(it)
+                                        onBack()
+                                    }
+                                    .onFailure {
+                                        isSaving = false
+                                        saveError = it.message ?: "Unable to save budget."
+                                    }
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(56.dp),
+            ) {
+                Text(
+                    if (isSaving) "Saving..." else "Add Budget",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+
+    if (showAddCategory) {
+        AddCategoryDialog(
+            isSaving = isSavingCategory,
+            error = addCategoryError,
+            onDismiss = { if (!isSavingCategory) showAddCategory = false },
+            onSave = { categoryName, icon ->
+                val ownerId = userId
+                if (ownerId == null) {
+                    addCategoryError = "Please sign in before adding a category."
+                } else {
+                    isSavingCategory = true
+                    addCategoryError = null
+                    categoryViewModel.addCategory(ownerId, categoryName, icon) { result ->
+                        isSavingCategory = false
+                        result
+                            .onSuccess {
+                                selectedCategoryId = it.categoryId
+                                showAddCategory = false
+                            }
+                            .onFailure {
+                                addCategoryError = it.message ?: "Unable to add category."
+                            }
+                    }
+                }
+            },
+        )
+    }
+}
+
 @Composable
 fun BudgetFormDialog(
     title: String,
     confirmText: String,
     initial: Budget?,
+    categories: List<Category>,
     onDismiss: () -> Unit,
     onSave: (String, Double, String, String, String) -> Unit,
 ) {
     var name by remember { mutableStateOf(initial?.budgetName ?: "") }
     var amountStr by remember { mutableStateOf(initial?.amountLimit?.toString() ?: "") }
-    var category by remember { mutableStateOf(initial?.category ?: CategoryColorsMap.keys.first()) }
+    var category by remember {
+        mutableStateOf(initial?.category ?: categories.firstOrNull()?.name.orEmpty())
+    }
     var startDate by remember {
         mutableStateOf(
             initial?.startDate?.toString() ?: LocalDate.now().withDayOfMonth(1).toString()
@@ -697,11 +925,11 @@ fun BudgetFormDialog(
                         expanded = catExpanded,
                         onDismissRequest = { catExpanded = false },
                     ) {
-                        CategoryColorsMap.keys.forEach { cat ->
+                        categories.forEach { item ->
                             DropdownMenuItem(
-                                text = { Text(cat) },
+                                text = { Text("${item.icon ?: "•"} ${item.name}") },
                                 onClick = {
-                                    category = cat
+                                    category = item.name
                                     catExpanded = false
                                 },
                             )

@@ -10,4 +10,22 @@ data class Category(
     val icon: String? = null,
     val description: String? = null,
     @SerialName("user_id") val userId: String? = null
-)
+) {
+    companion object {
+        /** Builds a user-owned category before it is inserted into Supabase. */
+        fun userCreated(
+            userId: String,
+            name: String,
+            icon: String,
+            description: String? = null,
+        ): Category {
+            require(name.isNotBlank()) { "Enter a category name." }
+            return Category(
+                name = name.trim(),
+                icon = icon.trim().ifBlank { "•" },
+                description = description?.trim()?.takeIf { it.isNotBlank() },
+                userId = userId,
+            )
+        }
+    }
+}
