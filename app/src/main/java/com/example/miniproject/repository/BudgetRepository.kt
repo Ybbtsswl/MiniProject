@@ -7,6 +7,8 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class BudgetRepository {
     private val supabase = SupabaseClient.instance
@@ -43,15 +45,15 @@ class BudgetRepository {
                     supabase
                         .from(budgetTable)
                         .insert(
-                            mapOf(
-                                "user_id" to budget.userId,
-                                "budget_name" to budget.budgetName,
-                                "amount_limit" to budget.amountLimit,
-                                "total_spent" to budget.totalSpent,
-                                "start_date" to budget.startDate,
-                                "end_date" to budget.endDate,
-                                "status" to budget.status,
-                            )
+                            buildJsonObject {
+                                put("user_id", budget.userId)
+                                put("budget_name", budget.budgetName)
+                                put("amount_limit", budget.amountLimit)
+                                put("total_spent", budget.totalSpent)
+                                put("start_date", budget.startDate)
+                                put("end_date", budget.endDate)
+                                put("status", budget.status)
+                            }
                         ) {
                             select()
                         }
@@ -70,14 +72,14 @@ class BudgetRepository {
                     supabase
                         .from(budgetTable)
                         .update(
-                            mapOf(
-                                "budget_name" to budget.budgetName,
-                                "amount_limit" to budget.amountLimit,
-                                "total_spent" to budget.totalSpent,
-                                "start_date" to budget.startDate,
-                                "end_date" to budget.endDate,
-                                "status" to budget.status,
-                            )
+                            buildJsonObject {
+                                put("budget_name", budget.budgetName)
+                                put("amount_limit", budget.amountLimit)
+                                put("total_spent", budget.totalSpent)
+                                put("start_date", budget.startDate)
+                                put("end_date", budget.endDate)
+                                put("status", budget.status)
+                            }
                         ) {
                             select()
                             filter {
