@@ -89,7 +89,9 @@ fun AppNavHost(
                 val destination = if (supabaseClient.auth.currentSessionOrNull() != null) {
                     Screen.Dashboard.route
                 } else {
-                    Screen.Onboarding.route
+                    // A logged-out user should always see the login/register
+                    // screen, including after an app restart.
+                    Screen.Auth.createRoute(isRegister = false)
                 }
 
                 navController.navigate(destination) {
@@ -219,8 +221,8 @@ fun AppNavHost(
             ) {
                 scope.launch {
                     supabaseClient.auth.signOut()
-                    navController.navigate(Screen.Onboarding.route) {
-                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    navController.navigate(Screen.Auth.createRoute(false)) {
+                        popUpTo(Screen.Dashboard.route) { inclusive = true }
                     }
                 }
             }
