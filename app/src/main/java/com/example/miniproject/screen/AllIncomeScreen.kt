@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +62,9 @@ fun AllIncomeScreen(
 
     val categoryName: (Income) -> String = { income ->
         categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.name ?: "Other"
+    }
+    val categoryIcon: (Income) -> String = { income ->
+        categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.icon ?: "💰"
     }
     val monthIncomes = incomes.filter { it.incomeDate.startsWith(selectedMonth) }
     val displayMonth = runCatching {
@@ -115,7 +120,7 @@ fun AllIncomeScreen(
                             Text(date, fontSize = 12.sp, color = MoneeMuted, modifier = Modifier.padding(top = 8.dp))
                         }
                         items(dateIncomes) { income ->
-                            AllIncomeRow(income, categoryName(income)) { selectedIncome = income }
+                            AllIncomeRow(income, categoryName(income), categoryIcon(income)) { selectedIncome = income }
                         }
                     }
                 }
@@ -178,7 +183,7 @@ fun AllIncomeScreen(
 }
 
 @Composable
-private fun AllIncomeRow(income: Income, categoryName: String, onClick: () -> Unit) {
+private fun AllIncomeRow(income: Income, categoryName: String, categoryIcon: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
@@ -186,6 +191,11 @@ private fun AllIncomeRow(income: Income, categoryName: String, onClick: () -> Un
         border = BorderStroke(1.dp, MoneeBorder)
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFFFF1C2)),
+                contentAlignment = Alignment.Center
+            ) { Text(categoryIcon, fontSize = 18.sp) }
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(categoryName, color = MoneeInk, fontWeight = FontWeight.SemiBold)
                 Text(income.description.ifBlank { "Income" }, color = MoneeMuted, fontSize = 12.sp)

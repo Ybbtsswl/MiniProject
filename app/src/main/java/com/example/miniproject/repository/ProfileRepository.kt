@@ -33,7 +33,7 @@ class ProfileRepository {
                     buildJsonObject { put("avatar_url", publicUrl) }
                 ) {
                     select()
-                    filter { eq("id", authenticatedUserId) }
+                    filter { eq("User_id", authenticatedUserId) }
                 }.decodeSingleOrNull<Profile>()
 
                 if (updatedProfile?.avatarUrl != publicUrl) {
@@ -68,7 +68,7 @@ class ProfileRepository {
                 }
             ) {
                 select()
-                filter { eq("id", userId) }
+                filter { eq("User_id", userId) }
             }.decodeSingle<Profile>()
             Result.success(updated)
         } catch (error: Exception) {
@@ -80,7 +80,7 @@ class ProfileRepository {
         try {
             val profile = supabase.from("profiles")
                 .select {
-                    filter { eq("id", userId) }
+                    filter { eq("User_id", userId) }
                 }
                 .decodeSingleOrNull<Profile>()
             Result.success(profile)

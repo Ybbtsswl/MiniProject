@@ -6,6 +6,8 @@ import com.example.miniproject.data.Profile
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
@@ -99,7 +101,17 @@ class AuthRepository(
 
     suspend fun requestPasswordRecovery(email: String): Result<Unit> {
         return try {
-            supabase.auth.resetPasswordForEmail(email)
+            val normalizedEmail = email.trim().lowercase(Locale.ROOT)
+            val emailExists = supabase.postgrest.rpc(
+                "email_exists_for_recovery",
+                parameters = buildJsonObject { put("email_input", normalizedEmail) }
+            ).decodeSingle<Boolean>()
+
+            if (!emailExists) {
+                error("Email not found. Please check the email address and try again.")
+            }
+
+            supabase.auth.resetPasswordForEmail(normalizedEmail)
             Result.success(Unit)
         } catch (error: Exception) {
             Result.failure(error)
@@ -133,6 +145,16 @@ class AuthRepository(
     suspend fun updatePassword(password: String): Result<Unit> {
         return try {
             supabase.auth.updateUser { this.password = password }
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            supabase.postgrest.rpc("delete_my_account")
+            supabase.auth.signOut()
             Result.success(Unit)
         } catch (error: Exception) {
             Result.failure(error)

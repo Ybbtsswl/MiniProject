@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -43,7 +44,9 @@ import com.example.miniproject.ui.theme.MoneeChip
 import com.example.miniproject.ui.theme.MoneeGradientButton
 import com.example.miniproject.ui.theme.moneeFieldColors
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
+import com.example.miniproject.ui.theme.MoneeYellowSoft
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -91,6 +94,9 @@ fun IncomeScreen(
         categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.name
             ?: income.categoryId?.takeIf { it.isNotBlank() }?.take(8)
             ?: "Other"
+    }
+    val categoryIcon: (Income) -> String = { income ->
+        categories.firstOrNull { it.incomeCategoryId == income.categoryId }?.icon ?: "💰"
     }
     val categoryTotals = monthIncomes.groupBy(categoryName)
         .mapValues { (_, values) -> values.sumOf { it.amount } }
@@ -213,7 +219,7 @@ fun IncomeScreen(
                     grouped.forEach { (date, itemsList) ->
                         Text(text = date, fontSize = 12.sp, color = MoneeMuted, modifier = Modifier.padding(top = 8.dp))
                         itemsList.forEach { income ->
-                            IncomeItemRow(income, categoryName(income)) { selectedIncome = income }
+                            IncomeItemRow(income, categoryName(income), categoryIcon(income)) { selectedIncome = income }
                         }
                     }
                 }
@@ -346,7 +352,7 @@ private fun IncomeCategoryBar(label: String, amount: Double, total: Double) {
 }
 
 @Composable
-private fun IncomeItemRow(income: Income, categoryName: String, onClick: () -> Unit) {
+private fun IncomeItemRow(income: Income, categoryName: String, categoryIcon: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
@@ -357,6 +363,11 @@ private fun IncomeItemRow(income: Income, categoryName: String, onClick: () -> U
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(MoneeYellowSoft),
+                contentAlignment = Alignment.Center
+            ) { Text(categoryIcon, fontSize = 18.sp) }
+            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(categoryName, color = MoneeInk, fontWeight = FontWeight.SemiBold)
                 Text(income.description.ifBlank { "Income" }, color = MoneeMuted, fontSize = 12.sp)
@@ -400,12 +411,12 @@ internal fun IncomeDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onEdit) { Text("Edit") }
+            TextButton(onClick = onEdit) { Text("Edit", color = Color.Black) }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text("Close", color = Color.Black) }
             }
         }
     )
@@ -465,16 +476,24 @@ internal fun EditIncomeDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            TextButton(
+                enabled = valid,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.Black),
+                onClick = {
                 onSave(income.copy(
                     amount = amount.toDouble(),
                     categoryId = selectedCategoryId,
                     incomeDate = date,
                     description = description.trim()
                 ))
-            }) { Text("Save") }
+            }) { Text("Save", color = Color.Black) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.Black),
+                onClick = onDismiss
+            ) { Text("Cancel", color = Color.Black) }
+        }
     )
 }
 

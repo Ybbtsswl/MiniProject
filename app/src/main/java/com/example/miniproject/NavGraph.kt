@@ -134,11 +134,7 @@ fun AppNavHost(
             val authRepository = remember { AuthRepository() }
             AuthScreen(
                 isRegister = isRegister,
-                onModeChange = { newMode ->
-                    navController.navigate(Screen.Auth.createRoute(newMode)) {
-                        popUpTo(Screen.Auth.route) { inclusive = true }
-                    }
-                },
+                onModeChange = { },
                 onSuccess = {
                     navController.navigate(Screen.Dashboard.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }

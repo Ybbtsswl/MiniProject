@@ -2,6 +2,9 @@ package com.example.miniproject.screen
 
 import android.Manifest
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.graphics.Bitmap
 import android.widget.Toast
@@ -20,8 +23,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,6 +139,7 @@ fun ProfileScreen(
             profile = profile,
             darkMode = darkMode,
             onBack = { page = "main" },
+            onAccountDeleted = onSignOut,
             onSaved = { updated ->
                 profile = updated
                 darkMode = updated.darkMode
@@ -141,6 +149,7 @@ fun ProfileScreen(
         else -> ProfileContent(
             name = profile?.fullName?.ifBlank { null } ?: "Alex Morgan",
             email = profile?.email?.ifBlank { null } ?: "alex.morgan@gmail.com",
+            userId = userId,
             avatarUrl = avatarUrl,
             isUploadingAvatar = isUploadingAvatar,
             onChangeAvatar = { showImagePicker = true },
@@ -177,6 +186,7 @@ fun ProfileScreen(
 private fun ProfileContent(
     name: String,
     email: String,
+    userId: String?,
     avatarUrl: String?,
     isUploadingAvatar: Boolean,
     onChangeAvatar: () -> Unit,
@@ -238,6 +248,32 @@ private fun ProfileContent(
         Text(name, color = ProfileText, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
         Text(email, color = ProfileMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
 
+        userId?.takeIf { it.isNotBlank() }?.let { id ->
+            val context = LocalContext.current
+            Row(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White)
+                    .clickable {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("User ID", id))
+                        Toast.makeText(context, "User ID copied", Toast.LENGTH_SHORT).show()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "User ID: ${id.take(12)}…",
+                    color = ProfileMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1
+                )
+                Text("⧉", color = ProfileText, fontSize = 18.sp)
+            }
+        }
+
         Spacer(Modifier.height(48.dp))
         SafeToSpendCard()
         Spacer(Modifier.height(18.dp))
@@ -265,6 +301,7 @@ private fun ProfileSettingsScreen(
     profile: Profile?,
     darkMode: Boolean,
     onBack: () -> Unit,
+    onAccountDeleted: () -> Unit,
     onSaved: (Profile) -> Unit
 ) {
     val context = LocalContext.current
@@ -274,100 +311,274 @@ private fun ProfileSettingsScreen(
     var name by remember(profile?.fullName) { mutableStateOf(profile?.fullName.orEmpty()) }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var passwordSaving by remember { mutableStateOf(false) }
+    var passwordMessage by remember { mutableStateOf("") }
+    var showNameDialog by remember { mutableStateOf(false) }
+    var nameSaving by remember { mutableStateOf(false) }
+    var nameMessage by remember { mutableStateOf("") }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deletingAccount by remember { mutableStateOf(false) }
+    var deleteMessage by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxSize().background(ProfileBackground)
             .verticalScroll(rememberScrollState()).padding(20.dp)
     ) {
-        TextButton(onClick = onBack) { Text("‹  Back", color = ProfileText) }
-        Text("My Profile", color = ProfileText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(20.dp))
-
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it; message = "" },
-            label = { Text("Name") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-        Text("${profile?.email.orEmpty()}", color = ProfileMuted, fontSize = 13.sp)
-        Spacer(Modifier.height(18.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                .background(Color.White).padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Dark mode", color = ProfileText, fontSize = 15.sp)
-                Text("Use a darker app appearance", color = ProfileMuted, fontSize = 12.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = ProfileText
+                )
             }
-            Switch(checked = darkMode, onCheckedChange = null, enabled = false)
+            Text("My Profile", color = ProfileText, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         }
+        Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(22.dp))
-        Text("Change password", color = ProfileText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = newPassword,
-            onValueChange = { newPassword = it; message = "" },
-            label = { Text("New password") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = { confirmPassword = it; message = "" },
-            label = { Text("Confirm new password") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (message.isNotBlank()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFFFF7D6)).padding(14.dp)
+        ) {
+            Text("MY ACCOUNT", color = ProfileText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFFFFBEA)).clickable {
+                        nameMessage = ""
+                        showNameDialog = true
+                    }.padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("👤", fontSize = 19.sp, modifier = Modifier.padding(end = 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Name", color = ProfileMuted, fontSize = 11.sp)
+                    Text(name.ifBlank { "Add your name" }, color = ProfileText, fontSize = 15.sp)
+                }
+                Text("›", color = ProfileMuted, fontSize = 20.sp)
+            }
             Spacer(Modifier.height(10.dp))
-            Text(message, color = Color(0xFFB3261E), fontSize = 13.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFFFFBEA)).padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("✉️", fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Email", color = ProfileMuted, fontSize = 11.sp)
+                    Text(profile?.email.orEmpty(), color = ProfileText, fontSize = 14.sp)
+                }
+                Text("🔒", fontSize = 15.sp)
+            }
         }
-        Spacer(Modifier.height(20.dp))
-        Button(
-            enabled = !saving && name.isNotBlank() &&
-                (newPassword.isBlank() || (newPassword.length >= 6 && newPassword == confirmPassword)),
-            onClick = {
-                val currentProfile = profile ?: return@Button
-                saving = true
-                scope.launch {
-                    var failed = false
-                    if (newPassword.isNotBlank()) {
-                        authRepository.updatePassword(newPassword).onFailure {
-                            message = it.message ?: "Password update failed"
-                            failed = true
-                        }
+
+        Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFFFF7D6)).padding(14.dp)
+        ) {
+            Text("PREFERENCES & SECURITY", color = ProfileText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFFFFBEA)).padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🌙", fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Dark mode", color = ProfileText, fontSize = 15.sp)
+                    Text("Use a darker app appearance", color = ProfileMuted, fontSize = 12.sp)
+                }
+                Switch(checked = darkMode, onCheckedChange = null, enabled = false)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFFFFBEA)).clickable {
+                        passwordMessage = ""
+                        showPasswordDialog = true
+                    }.padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🔑", fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Change password", color = ProfileText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Update your account password", color = ProfileMuted, fontSize = 12.sp)
+                }
+                Text("›", color = ProfileMuted, fontSize = 20.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFFFE8E8)).clickable {
+                        deleteMessage = ""
+                        showDeleteDialog = true
+                    }.padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🗑️", fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Delete account", color = Color(0xFFB3261E), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Permanently remove your account and data", color = Color(0xFFB3261E), fontSize = 12.sp)
+                }
+                Text("›", color = Color(0xFFB3261E), fontSize = 20.sp)
+            }
+        }
+    }
+
+    if (showPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!passwordSaving) showPasswordDialog = false },
+            title = { Text("Change password", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it; passwordMessage = "" },
+                        label = { Text("New password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it; passwordMessage = "" },
+                        label = { Text("Confirm new password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (passwordMessage.isNotBlank()) {
+                        Text(passwordMessage, color = Color(0xFFB3261E), fontSize = 13.sp)
                     }
-                    if (!failed) {
-                        profileRepository.updateProfileDetails(
-                            currentProfile.id,
-                            name.trim(),
-                            darkMode
-                        ).onSuccess {
-                            onSaved(it)
-                            newPassword = ""
-                            confirmPassword = ""
-                            message = "Profile updated successfully."
-                            Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
-                        }.onFailure {
-                            message = it.message ?: "Profile update failed"
-                        }
-                    }
-                    saving = false
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD447), contentColor = ProfileText),
-            shape = RoundedCornerShape(16.dp)
-        ) { Text(if (saving) "Saving..." else "Save changes", fontWeight = FontWeight.Bold) }
+            confirmButton = {
+                TextButton(
+                    enabled = !passwordSaving,
+                    onClick = {
+                        passwordMessage = when {
+                            newPassword.isBlank() -> "Enter a new password."
+                            newPassword.length < 6 -> "Password must be at least 6 characters."
+                            confirmPassword.isBlank() -> "Confirm your new password."
+                            newPassword != confirmPassword -> "Passwords do not match."
+                            else -> ""
+                        }
+                        if (passwordMessage.isNotBlank()) return@TextButton
+
+                        passwordSaving = true
+                        scope.launch {
+                            authRepository.updatePassword(newPassword)
+                                .onSuccess {
+                                    newPassword = ""
+                                    confirmPassword = ""
+                                    showPasswordDialog = false
+                                    Toast.makeText(context, "Password updated", Toast.LENGTH_SHORT).show()
+                                }
+                                .onFailure { passwordMessage = it.message ?: "Password update failed" }
+                            passwordSaving = false
+                        }
+                    }
+                ) { Text(if (passwordSaving) "Saving..." else "Save", color = Color.Black) }
+            },
+            dismissButton = {
+                TextButton(enabled = !passwordSaving, onClick = { showPasswordDialog = false }) { Text("Cancel", color = Color.Black) }
+            }
+        )
+    }
+
+    if (showNameDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!nameSaving) showNameDialog = false },
+            title = { Text("Change name", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it; nameMessage = "" },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (nameMessage.isNotBlank()) {
+                        Text(nameMessage, color = Color(0xFFB3261E), fontSize = 13.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !nameSaving,
+                    onClick = {
+                        val updatedName = name.trim()
+                        if (updatedName.isBlank()) {
+                            nameMessage = "Name cannot be empty."
+                            return@TextButton
+                        }
+                        val currentProfile = profile
+                        if (currentProfile == null) {
+                            nameMessage = "Profile could not be loaded. Please try again."
+                            return@TextButton
+                        }
+                        nameSaving = true
+                        scope.launch {
+                            profileRepository.updateProfileDetails(
+                                currentProfile.id,
+                                updatedName,
+                                darkMode
+                            ).onSuccess {
+                                name = updatedName
+                                onSaved(it)
+                                showNameDialog = false
+                                Toast.makeText(context, "Name updated", Toast.LENGTH_SHORT).show()
+                            }.onFailure {
+                                nameMessage = it.message ?: "Name update failed"
+                            }
+                            nameSaving = false
+                        }
+                    }
+                ) { Text(if (nameSaving) "Saving..." else "Save", color = Color.Black) }
+            },
+            dismissButton = {
+                TextButton(enabled = !nameSaving, onClick = { showNameDialog = false }) { Text("Cancel", color = Color.Black) }
+            }
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!deletingAccount) showDeleteDialog = false },
+            title = { Text("Delete account?", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This permanently deletes your profile, income, expenses, and other account data. This cannot be undone.")
+                    if (deleteMessage.isNotBlank()) {
+                        Text(deleteMessage, color = Color(0xFFB3261E), fontSize = 13.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingAccount,
+                    onClick = {
+                        deletingAccount = true
+                        scope.launch {
+                            authRepository.deleteAccount()
+                                .onSuccess {
+                                    showDeleteDialog = false
+                                    Toast.makeText(context, "Account deleted", Toast.LENGTH_SHORT).show()
+                                    onAccountDeleted()
+                                }
+                                .onFailure { deleteMessage = it.message ?: "Unable to delete account" }
+                            deletingAccount = false
+                        }
+                    }
+                ) { Text(if (deletingAccount) "Deleting..." else "Delete", color = Color(0xFFB3261E)) }
+            },
+            dismissButton = {
+                TextButton(enabled = !deletingAccount, onClick = { showDeleteDialog = false }) { Text("Cancel", color = Color.Black) }
+            }
+        )
     }
 }
 
@@ -378,8 +589,16 @@ private fun HelpSupportScreen(onBack: () -> Unit) {
         modifier = Modifier.fillMaxSize().background(ProfileBackground)
             .verticalScroll(rememberScrollState()).padding(20.dp)
     ) {
-        TextButton(onClick = onBack) { Text("‹  Back", color = ProfileText) }
-        Text("Help & Support", color = ProfileText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = ProfileText
+                )
+            }
+            Text("Help & Support", color = ProfileText, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
         Spacer(Modifier.height(20.dp))
         Text("Frequently asked questions", color = ProfileText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
@@ -479,6 +698,7 @@ private fun ProfileScreenPreview() {
         ProfileContent(
             name = "Alex Morgan",
             email = "alex.morgan@gmail.com",
+            userId = null,
             avatarUrl = null,
             isUploadingAvatar = false,
             onChangeAvatar = { },

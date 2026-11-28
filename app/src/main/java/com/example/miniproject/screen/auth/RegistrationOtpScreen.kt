@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,8 +68,19 @@ fun RegistrationOtpScreen(
 
     Column(
         modifier = Modifier.fillMaxSize().background(Cream).padding(28.dp),
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to login",
+                    tint = Ink
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
         Text("Verify your email", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
         Spacer(Modifier.height(10.dp))
         Text("Enter the OTP sent to $email", color = Color(0xFF777777))
@@ -129,14 +143,5 @@ fun RegistrationOtpScreen(
             colors = ButtonDefaults.textButtonColors(contentColor = Ink)
         ) { Text("Resend OTP") }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Button(
-                onClick = onBack,
-                colors = ButtonDefaults.textButtonColors(contentColor = Ink)
-            ) { Text("Back") }
-        }
     }
 }

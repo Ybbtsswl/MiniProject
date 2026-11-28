@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,8 +75,19 @@ fun ForgotPasswordScreen(
 
     Column(
         modifier = Modifier.fillMaxSize().background(Cream).padding(28.dp),
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back to login",
+                    tint = Ink
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
         Text(
             text = when (step) {
                 0 -> "Forgot password?"
@@ -173,9 +187,10 @@ fun ForgotPasswordScreen(
                             1 -> { step = 2; message = "" }
                             else -> onCompleted()
                         }
-                    }.onFailure {
+                    }.onFailure { error ->
                         message = when (step) {
-                            0 -> "Unable to send the recovery email. Check the email and try again."
+                            0 -> error.message?.takeIf { it.contains("Email not found", ignoreCase = true) }
+                                ?: "Unable to send the recovery email. Check the email and try again."
                             1 -> "Incorrect or expired OTP."
                             else -> "Unable to update the password. Please try again."
                         }
@@ -213,8 +228,5 @@ fun ForgotPasswordScreen(
             ) { Text("Resend OTP", color = Ink) }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onBack) { Text("Back", color = Ink) }
-        }
     }
 }

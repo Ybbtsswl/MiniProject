@@ -56,6 +56,7 @@ fun AuthScreen(
     onRegistrationOtpRequired: (email: String, name: String) -> Unit,
     onAuthenticate: suspend (AuthRequest) -> Result<AuthOutcome>
 ) {
+    var registerMode by rememberSaveable { mutableStateOf(isRegister) }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -103,7 +104,7 @@ fun AuthScreen(
             )
 
             Text(
-                text = if (isRegister) {
+                text = if (registerMode) {
                     "Create your smart finance account"
                 } else {
                     "Welcome back to your smart finance companion"
@@ -124,22 +125,22 @@ fun AuthScreen(
             ) {
                 ModeButton(
                     label = "Log in",
-                    selected = !isRegister,
-                    onClick = { onModeChange(false) },
+                    selected = !registerMode,
+                    onClick = { registerMode = false; onModeChange(false) },
                     modifier = Modifier.weight(1f)
                 )
 
                 ModeButton(
                     label = "Register",
-                    selected = isRegister,
-                    onClick = { onModeChange(true) },
+                    selected = registerMode,
+                    onClick = { registerMode = true; onModeChange(true) },
                     modifier = Modifier.weight(1f)
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (isRegister) {
+            if (registerMode) {
                 AuthField(
                     label = "Full name",
                     value = name,
@@ -179,7 +180,7 @@ fun AuthScreen(
                 imeAction = ImeAction.Next
             )
 
-            if (isRegister) {
+            if (registerMode) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 PasswordField(
@@ -195,7 +196,7 @@ fun AuthScreen(
                 )
             }
 
-            if (!isRegister) {
+            if (!registerMode) {
                 TextButton(
                     onClick = {
                         onForgotPassword()
@@ -208,6 +209,10 @@ fun AuthScreen(
                         fontSize = 13.sp
                     )
                 }
+            }
+
+            if (registerMode) {
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             if (error.isNotBlank()) {
@@ -235,11 +240,11 @@ fun AuthScreen(
                             "Password must be at least 6 characters."
                         }
 
-                        isRegister && name.isBlank() -> {
+                        registerMode && name.isBlank() -> {
                             "Please enter your name."
                         }
 
-                        isRegister && password != confirmPassword -> {
+                        registerMode && password != confirmPassword -> {
                             "Passwords do not match."
                         }
 
@@ -253,7 +258,7 @@ fun AuthScreen(
                         scope.launch {
                             onAuthenticate(
                                 AuthRequest(
-                                    isRegister = isRegister,
+                                    isRegister = registerMode,
                                     name = name.trim(),
                                     email = email.trim(),
                                     password = password
@@ -275,7 +280,13 @@ fun AuthScreen(
                                         "Email or password is incorrect."
                                     }
 
-                                    else -> message.ifBlank {
+                    message.contains("already registered", ignoreCase = true) ||
+                        message.contains("user_already_exists", ignoreCase = true) ||
+                        message.contains("email_exists", ignoreCase = true) -> {
+                        "This email is already registered. Please log in instead."
+                    }
+
+                    else -> message.ifBlank {
                                         "Authentication failed. Please try again."
                                     }
                                 }
@@ -294,7 +305,7 @@ fun AuthScreen(
                 )
             ) {
                 Text(
-                    text = if (isLoading) "Please wait..." else if (isRegister) "Create account" else "Log in",
+                    text = if (isLoading) "Please wait..." else if (registerMode) "Create account" else "Log in",
                     fontWeight = FontWeight.Bold
                 )
             }
