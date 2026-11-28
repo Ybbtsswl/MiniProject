@@ -59,10 +59,12 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:3.6.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     // Ktor engine; the Supabase modules bring in ktor-client-core and content-negotiation
     implementation("io.ktor:ktor-client-android:3.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // ML Kit text recognition (Latin script)
     implementation("com.google.mlkit:text-recognition:16.0.1")
