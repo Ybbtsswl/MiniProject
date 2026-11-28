@@ -430,7 +430,7 @@ class SplitBillRepository(
             try {
                 val user = supabase.postgrest["profiles"]
                     .select {
-                        filter { eq("id", userId) }
+                        filter { eq("User_id", userId) }
                         limit(1)
                     }
                     .decodeSingleOrNull<JsonObject>()

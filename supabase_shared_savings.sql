@@ -206,7 +206,7 @@ with check (
 create or replace view public.saving_group_user_directory
 with (security_invoker = false)
 as
-select id, full_name, email
+select "User_id" as id, full_name, email
 from public.profiles;
 
 revoke all on public.saving_group_user_directory from public, anon;

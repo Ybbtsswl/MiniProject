@@ -227,7 +227,7 @@ class SavingsViewModel : ViewModel() {
         val profiles =
             SupabaseClient.instance
                 .from("profiles")
-                .select { filter { eq("id", userId()) } }
+                .select { filter { eq("User_id", userId()) } }
                 .decodeList<Profile>()
         currentUserName = profiles.firstOrNull()?.fullName.orEmpty()
         records = repository.getGoals(userId()).getOrThrow()
